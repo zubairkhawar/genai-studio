@@ -53,13 +53,13 @@ export function MediaPreview({ job }: MediaPreviewProps) {
           <AlertCircle className="h-16 w-16 mx-auto text-accent-red animate-pulse" />
           <div className="absolute inset-0 h-16 w-16 mx-auto rounded-full border-2 border-accent-red/20 animate-ping"></div>
         </div>
-        <h3 className={`text-xl font-bold text-${colors.text.primary} mb-3`}>Generation Failed</h3>
+        <h3 className={`text-xl font-bold text-gray-900 dark:text-slate-100 mb-3`}>Generation Failed</h3>
         <div className={`p-4 bg-accent-red/10 border border-accent-red/20 rounded-xl mb-6`}>
-          <p className={`text-${colors.text.secondary} font-medium`}>{job.error}</p>
+          <p className={`text-gray-600 dark:text-slate-300 font-medium`}>{job.error}</p>
         </div>
         <button
           onClick={() => window.location.reload()}
-          className={`px-6 py-3 ${colors.button.primary} rounded-xl font-semibold hover:scale-105 transition-all duration-200`}
+          className={`px-6 py-3 bg-accent-blue text-white hover:bg-accent-blue/90 rounded-xl font-semibold hover:scale-105 transition-all duration-200`}
         >
           Try Again
         </button>
@@ -74,10 +74,10 @@ export function MediaPreview({ job }: MediaPreviewProps) {
           <Loader2 className="h-16 w-16 mx-auto text-accent-blue animate-spin" />
           <div className="absolute inset-0 h-16 w-16 mx-auto rounded-full border-2 border-accent-blue/20 animate-pulse"></div>
         </div>
-        <h3 className={`text-xl font-bold text-${colors.text.primary} mb-3`}>
+        <h3 className={`text-xl font-bold text-gray-900 dark:text-slate-100 mb-3`}>
           Creating {job.model_type === 'video' ? 'Video' : 'Audio'} Magic...
         </h3>
-        <p className={`text-${colors.text.secondary} mb-6 font-medium`}>{job.prompt}</p>
+        <p className={`text-gray-600 dark:text-slate-300 mb-6 font-medium`}>{job.prompt}</p>
         <div className={`w-full bg-${colors.bg.secondary} rounded-full h-3 mb-4 overflow-hidden`}>
           <div
             className="bg-gradient-to-r from-accent-blue to-accent-violet h-3 rounded-full transition-all duration-500 relative"
@@ -86,7 +86,7 @@ export function MediaPreview({ job }: MediaPreviewProps) {
             <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
           </div>
         </div>
-        <p className={`text-sm font-semibold text-${colors.text.secondary}`}>{job.progress}% complete</p>
+        <p className={`text-sm font-semibold text-gray-600 dark:text-slate-300`}>{job.progress}% complete</p>
       </div>
     );
   }
@@ -102,16 +102,16 @@ export function MediaPreview({ job }: MediaPreviewProps) {
           </div>
           <div className="absolute inset-0 h-16 w-16 mx-auto rounded-full border-2 border-yellow-500/20 animate-ping"></div>
         </div>
-        <h3 className={`text-xl font-bold text-${colors.text.primary} mb-3`}>Job Queued</h3>
-        <p className={`text-${colors.text.secondary} mb-4 font-medium`}>{job.prompt}</p>
-        <p className={`text-sm text-${colors.text.secondary}`}>Waiting to start generation...</p>
+        <h3 className={`text-xl font-bold text-gray-900 dark:text-slate-100 mb-3`}>Job Queued</h3>
+        <p className={`text-gray-600 dark:text-slate-300 mb-4 font-medium`}>{job.prompt}</p>
+        <p className={`text-sm text-gray-600 dark:text-slate-300`}>Waiting to start generation...</p>
       </div>
     );
   }
 
   if (job.status !== 'completed' || !job.output_file) {
     return (
-      <div className={`p-8 text-center text-${colors.text.secondary}`}>
+      <div className={`p-8 text-center text-gray-600 dark:text-slate-300`}>
         <div className="relative mb-4">
           <Sparkles className="h-12 w-12 mx-auto text-accent-blue/50" />
           <div className="absolute inset-0 h-12 w-12 mx-auto rounded-full border-2 border-accent-blue/20 animate-pulse"></div>
@@ -132,9 +132,9 @@ export function MediaPreview({ job }: MediaPreviewProps) {
           <div className="p-2 bg-accent-green/10 rounded-lg">
             <Sparkles className="h-5 w-5 text-accent-green" />
           </div>
-          <h3 className={`text-xl font-bold text-${colors.text.primary}`}>Preview</h3>
+          <h3 className={`text-xl font-bold text-gray-900 dark:text-slate-100`}>Preview</h3>
         </div>
-        <p className={`text-${colors.text.secondary} font-medium`}>{job.prompt}</p>
+        <p className={`text-gray-600 dark:text-slate-300 font-medium`}>{job.prompt}</p>
       </div>
 
       <div className={`bg-${colors.bg.secondary} rounded-2xl overflow-hidden shadow-lg`}>
@@ -174,7 +174,7 @@ export function MediaPreview({ job }: MediaPreviewProps) {
       </div>
 
       <div className="mt-6 flex items-center justify-between">
-        <div className={`flex items-center space-x-3 text-sm text-${colors.text.secondary}`}>
+        <div className={`flex items-center space-x-3 text-sm text-gray-600 dark:text-slate-300`}>
           <div className="flex items-center space-x-1">
             <Sparkles className="h-4 w-4" />
             <span>{job.model_name}</span>
@@ -185,7 +185,7 @@ export function MediaPreview({ job }: MediaPreviewProps) {
         
         <button
           onClick={handleDownload}
-          className={`flex items-center space-x-2 px-6 py-3 ${colors.button.primary} rounded-xl font-semibold hover:scale-105 transition-all duration-200 group`}
+          className={`flex items-center space-x-2 px-6 py-3 bg-accent-blue text-white hover:bg-accent-blue/90 rounded-xl font-semibold hover:scale-105 transition-all duration-200 group`}
         >
           <Download className="h-4 w-4 group-hover:animate-bounce" />
           <span>Download</span>

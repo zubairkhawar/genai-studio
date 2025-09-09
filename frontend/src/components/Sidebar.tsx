@@ -34,7 +34,7 @@ export function Sidebar({ current, expanded, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`group fixed left-0 top-0 h-full ${colors.bg.secondary} ${colors.text.primary} border-r ${colors.border} transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} shadow-md z-30`}
+      className={`group fixed left-0 top-0 h-full bg-white dark:bg-slate-800/50 text-gray-900 dark:text-slate-100 border-r border-gray-200 dark:border-slate-700 transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} shadow-md z-30`}
     >
       <div className="flex items-center justify-between h-14 px-2 md:px-4 border-b">
         <div className="flex items-center">
@@ -67,7 +67,7 @@ export function Sidebar({ current, expanded, onToggle }: SidebarProps) {
         {navGroups.map(({ label, items }) => (
           <div key={label}>
             {expanded && (
-              <div className={`px-3 py-2 text-xs uppercase tracking-wide ${colors.text.secondary}`}>{label}</div>
+              <div className={`px-3 py-2 text-xs uppercase tracking-wide text-gray-600 dark:text-slate-300`}>{label}</div>
             )}
             <div className="space-y-1">
               {items.map(({ href, label, icon: Icon }) => {
@@ -86,7 +86,7 @@ export function Sidebar({ current, expanded, onToggle }: SidebarProps) {
                 );
               })}
             </div>
-            <div className={`my-2 ${expanded ? 'mx-3' : 'mx-2'} h-px ${expanded ? colors.border : 'bg-transparent'}`} />
+            <div className={`my-2 ${expanded ? 'mx-3' : 'mx-2'} h-px ${expanded ? 'border-gray-200 dark:border-slate-700' : 'bg-transparent'}`} />
           </div>
         ))}
       </nav>

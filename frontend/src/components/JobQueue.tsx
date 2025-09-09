@@ -109,7 +109,7 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
   return (
     <div className="h-[600px] overflow-hidden flex flex-col">
       {/* Filter Tabs */}
-      <div className={`flex border-b ${colors.border} px-6 bg-gradient-to-r from-transparent via-${colors.bg.secondary}/50 to-transparent`}>
+      <div className={`flex border-b border-gray-200 dark:border-slate-700 px-6 bg-gradient-to-r from-transparent via-gray-50/50 dark:via-slate-800/50 to-transparent`}>
         {[
           { key: 'all', label: 'All Jobs', count: jobs.length, icon: Sparkles, color: 'accent-blue' },
           { key: 'pending', label: 'Pending', count: jobs.filter(j => j.status === 'pending' || j.status === 'queued').length, icon: Clock, color: 'accent-violet' },
@@ -123,7 +123,7 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
             className={`relative flex items-center space-x-3 px-6 py-4 text-sm font-medium transition-all duration-300 group ${
               filter === key
                 ? `text-${color} bg-${color}/10`
-                : `text-${colors.text.secondary} hover:text-${colors.text.primary} hover:bg-${colors.bg.secondary}/50`
+                : `text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-700/50`
             }`}
           >
             {filter === key && (
@@ -136,7 +136,7 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                 ? `bg-${color}/20 text-${color} shadow-lg` 
                 : count > 0 
                   ? `bg-${color}/10 text-${color} group-hover:bg-${color}/20` 
-                  : `bg-${colors.bg.secondary} text-${colors.text.secondary}`
+                  : `bg-gray-50 dark:bg-slate-700/50 text-gray-600 dark:text-slate-300`
             }`}>
               {count}
             </span>
@@ -160,10 +160,10 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                   <span className="text-white text-xs">⚡</span>
                 </div>
               </div>
-              <h3 className={`text-2xl font-bold text-${colors.text.primary} mb-4 bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent`}>
+              <h3 className={`text-2xl font-bold text-gray-900 dark:text-slate-100 mb-4 bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent`}>
                 {filter === 'all' ? 'Ready to Create Magic?' : `No ${filter} jobs yet`}
               </h3>
-              <p className={`text-${colors.text.secondary} mb-8 text-lg leading-relaxed`}>
+              <p className={`text-gray-600 dark:text-slate-300 mb-8 text-lg leading-relaxed`}>
                 {filter === 'all' 
                   ? 'Start by entering a creative prompt to generate your first video or audio masterpiece!'
                   : `No ${filter} jobs found. Try switching to another filter or create a new job.`
@@ -183,7 +183,7 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
             {filteredJobs.map((job, index) => (
               <div
                 key={job.job_id}
-                className={`p-6 rounded-2xl border ${colors.border} ${colors.bg.secondary} hover:scale-[1.02] cursor-pointer transition-all duration-300 group ${
+                className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:scale-[1.02] cursor-pointer transition-all duration-300 group ${
                   selectedJob?.job_id === job.job_id 
                     ? `bg-accent-blue/10 border-accent-blue/50 shadow-glow-blue` 
                     : 'hover:shadow-lg hover:border-accent-blue/30'
@@ -213,13 +213,13 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                                 style={{ width: `${job.progress}%` }}
                               ></div>
                             </div>
-                            <span className={`text-sm font-bold text-${colors.text.primary}`}>{job.progress}%</span>
+                            <span className={`text-sm font-bold text-gray-900 dark:text-slate-100`}>{job.progress}%</span>
                           </div>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <span className={`text-sm font-medium text-${colors.text.secondary} bg-${colors.bg.primary} px-3 py-1 rounded-lg`}>
+                      <span className={`text-sm font-medium text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 px-3 py-1 rounded-lg`}>
                         {new Date(job.created_at).toLocaleTimeString()}
                       </span>
                       {job.status === 'processing' && (
@@ -235,7 +235,7 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                   {/* Prompt Preview */}
                   {job.prompt && (
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                      <p className={`text-sm text-${colors.text.primary} line-clamp-2 font-medium`}>
+                      <p className={`text-sm text-gray-900 dark:text-slate-100 line-clamp-2 font-medium`}>
                         {job.prompt}
                       </p>
                     </div>
@@ -243,7 +243,7 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                   
                   {/* Job Details */}
                   <div className="flex items-center justify-between">
-                    <div className={`flex items-center space-x-4 text-xs text-${colors.text.secondary}`}>
+                    <div className={`flex items-center space-x-4 text-xs text-gray-600 dark:text-slate-300`}>
                       <span className="flex items-center space-x-1">
                         <Sparkles className="h-3 w-3" />
                         <span>{job.model_type} • {job.model_name}</span>

@@ -135,19 +135,19 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
           <div className="flex items-center justify-center w-8 h-8 bg-accent-violet text-white rounded-full text-sm font-bold">
             1
           </div>
-          <h3 className={`text-lg font-semibold ${colors.text.primary}`}>
+          <h3 className={`text-lg font-semibold text-gray-900 dark:text-slate-100`}>
             Select AI Model
           </h3>
         </div>
         <div className="ml-11">
-          <label className={`block text-sm font-medium ${colors.text.secondary} mb-3`}>
+          <label className={`block text-sm font-medium text-gray-600 dark:text-slate-300 mb-3`}>
             Choose the AI model for generation
           </label>
         <div className="relative">
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            className={`w-full px-4 py-4 bg-white dark:bg-dark-bg-secondary border-2 ${colors.border} rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 ${colors.text.primary} hover:border-accent-blue/50 hover:shadow-xl appearance-none cursor-pointer`}
+            className={`w-full px-4 py-4 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 hover:border-accent-blue/50 hover:shadow-xl appearance-none cursor-pointer`}
             required
           >
             <option value="">✨ Choose your AI model...</option>
@@ -168,7 +168,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h4 className="font-semibold text-accent-blue mb-2">{selectedModelObj.name}</h4>
-                <p className={`text-sm ${colors.text.secondary} mb-3`}>
+                <p className={`text-sm text-gray-600 dark:text-slate-300 mb-3`}>
                   {selectedModelObj.description}
                 </p>
                 <div className="flex items-center gap-2 text-xs">
@@ -207,12 +207,12 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
           <div className="flex items-center justify-center w-8 h-8 bg-accent-green text-white rounded-full text-sm font-bold">
             2
           </div>
-          <h3 className={`text-lg font-semibold ${colors.text.primary}`}>
+          <h3 className={`text-lg font-semibold text-gray-900 dark:text-slate-100`}>
             Enter Your Prompt
           </h3>
         </div>
         <div className="ml-11">
-          <label className={`block text-sm font-medium ${colors.text.secondary} mb-3`}>
+          <label className={`block text-sm font-medium text-gray-600 dark:text-slate-300 mb-3`}>
             Describe what you want to create
           </label>
         <div className="relative">
@@ -225,7 +225,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
               e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
             }}
             placeholder="✨ Describe what you want to create... Be as detailed as possible for better results!"
-            className={`w-full px-4 py-4 bg-white dark:bg-dark-bg-secondary border-2 ${colors.border} rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 ${colors.text.primary} resize-none min-h-[100px] hover:border-accent-blue/50 hover:shadow-xl`}
+            className={`w-full px-4 py-4 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 resize-none min-h-[100px] hover:border-accent-blue/50 hover:shadow-xl`}
             rows={3}
             required
           />
@@ -262,7 +262,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
         <button
           type="button"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className={`flex items-center justify-between w-full p-3 text-sm font-medium ${colors.text.secondary} hover:${colors.text.primary} transition-colors rounded-lg hover:${colors.bg.secondary}`}
+          className={`flex items-center justify-between w-full p-3 text-sm font-medium text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:text-slate-100 transition-colors rounded-lg hover:${colors.bg.secondary}`}
         >
           <div className="flex items-center space-x-2">
             <Settings className="h-4 w-4" />
@@ -278,20 +278,20 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
 
       {/* Advanced Settings */}
       {showAdvanced && (
-        <div className={`space-y-6 p-6 ${colors.bg.secondary} rounded-2xl border ${colors.border} animate-slide-down shadow-xl backdrop-blur-md`}>
+        <div className={`space-y-6 p-6 ${colors.bg.secondary} rounded-2xl border border-gray-200 dark:border-slate-600 animate-slide-down shadow-xl backdrop-blur-md`}>
           <div className="flex items-center space-x-2 mb-4">
             <div className="w-2 h-2 bg-accent-blue rounded-full"></div>
-            <h4 className={`text-sm font-semibold ${colors.text.primary}`}>Generation Parameters</h4>
+            <h4 className={`text-sm font-semibold text-gray-900 dark:text-slate-100`}>Generation Parameters</h4>
           </div>
 
           {/* Duration (for video) */}
           {modelType === 'video' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className={`text-sm font-medium ${colors.text.primary}`}>
+                <label className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>
                   Duration
                 </label>
-                <span className={`text-sm ${colors.text.secondary}`}>{duration}s</span>
+                <span className={`text-sm text-gray-600 dark:text-slate-300`}>{duration}s</span>
               </div>
               <div className="relative">
                 <input
@@ -313,7 +313,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
           {/* Sample Rate (for audio) */}
           {modelType === 'audio' && (
             <div className="space-y-3">
-              <label className={`text-sm font-medium ${colors.text.primary}`}>
+              <label className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>
                 Sample Rate
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -330,7 +330,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
                     className={`p-3 rounded-xl border text-left transition-all duration-200 hover:scale-105 ${
                       sampleRate === option.value
                         ? 'border-accent-blue bg-accent-blue/10 text-accent-blue shadow-lg'
-                        : `${colors.border} hover:border-accent-blue/50 hover:bg-accent-blue/5`
+                        : `border-gray-200 dark:border-slate-600 hover:border-accent-blue/50 hover:bg-accent-blue/5`
                     }`}
                   >
                     <div className="font-medium text-sm">{option.label}</div>
@@ -343,7 +343,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
 
           {/* Output Format */}
           <div className="space-y-3">
-            <label className={`text-sm font-medium ${colors.text.primary}`}>
+            <label className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>
               Output Format
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -366,7 +366,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
                   className={`p-3 rounded-xl border text-center transition-all duration-200 hover:scale-105 ${
                     outputFormat === option.value
                       ? 'border-accent-violet bg-accent-violet/10 text-accent-violet shadow-lg'
-                      : `${colors.border} hover:border-accent-violet/50 hover:bg-accent-violet/5`
+                      : `border-gray-200 dark:border-slate-600 hover:border-accent-violet/50 hover:bg-accent-violet/5`
                   }`}
                 >
                   <div className="font-medium text-sm">{option.label}</div>

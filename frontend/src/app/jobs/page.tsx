@@ -69,7 +69,7 @@ export default function Page() {
         <button
           onClick={fetchJobs}
           disabled={isRefreshing}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl border ${colors.border} hover:${colors.bg.secondary} transition-all duration-200 ${
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-all duration-200 ${
             isRefreshing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
           }`}
         >
@@ -89,14 +89,14 @@ export default function Page() {
         ].map(({ label, value, icon: Icon, color }) => (
           <div
             key={label}
-            className={`p-6 rounded-2xl border ${colors.border} ${colors.bg.secondary} hover:scale-105 transition-all duration-300 group`}
+            className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:scale-105 transition-all duration-300 group shadow-lg`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm font-medium text-${colors.text.secondary} mb-1`}>
+                <p className={`text-sm font-medium text-gray-600 dark:text-slate-300 mb-1`}>
                   {label}
                 </p>
-                <p className={`text-2xl font-bold text-${colors.text.primary}`}>
+                <p className={`text-2xl font-bold text-gray-900 dark:text-slate-100`}>
                   {value}
                 </p>
               </div>
@@ -109,7 +109,7 @@ export default function Page() {
       </div>
 
       {/* Job Queue */}
-      <div className={`rounded-2xl border ${colors.border} ${colors.bg.secondary} overflow-hidden shadow-lg`}>
+      <div className={`rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 overflow-hidden shadow-lg`}>
         <JobQueue jobs={jobs} onJobSelect={(j)=>setSelectedJob(j)} selectedJob={selectedJob} />
       </div>
     </div>

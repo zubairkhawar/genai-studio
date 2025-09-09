@@ -57,19 +57,19 @@ export function GPUInfo({ gpuInfo }: GPUInfoProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center space-x-2 px-3 py-2 rounded-lg bg-${colors.bg.secondary} hover:bg-${colors.bg.primary} transition-all duration-200 group`}
+        className={`flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-600/50 transition-all duration-200 group`}
         title="Click to view system details"
       >
         {getGPUIcon()}
         <div className="flex items-center space-x-1">
-          <span className={`text-sm font-medium text-${colors.text.primary}`}>
+          <span className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>
             {getGPUType()}
           </span>
-          <span className={`text-xs text-${colors.text.secondary}`}>
+          <span className={`text-xs text-gray-600 dark:text-slate-300`}>
             {gpuInfo.memory_gb.toFixed(1)}GB
           </span>
         </div>
-        <ChevronDown className={`h-3 w-3 text-${colors.text.secondary} transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3 w-3 text-gray-600 dark:text-slate-300 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -77,37 +77,37 @@ export function GPUInfo({ gpuInfo }: GPUInfoProps) {
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <Monitor className="h-5 w-5 text-accent-blue" />
-              <h3 className={`text-lg font-semibold text-${colors.text.primary}`}>System Info</h3>
+              <h3 className={`text-lg font-semibold text-gray-900 dark:text-slate-100`}>System Info</h3>
             </div>
             
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className={`text-sm text-${colors.text.secondary}`}>GPU Type</span>
+                <span className={`text-sm text-gray-600 dark:text-slate-300`}>GPU Type</span>
                 <div className="flex items-center space-x-2">
                   {getGPUIcon()}
-                  <span className={`text-sm font-medium text-${colors.text.primary}`}>{getGPUType()}</span>
+                  <span className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>{getGPUType()}</span>
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className={`text-sm text-${colors.text.secondary}`}>Device</span>
-                <span className={`text-sm font-medium text-${colors.text.primary}`}>{gpuInfo.name}</span>
+                <span className={`text-sm text-gray-600 dark:text-slate-300`}>Device</span>
+                <span className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>{gpuInfo.name}</span>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className={`text-sm text-${colors.text.secondary}`}>Memory</span>
-                <span className={`text-sm font-medium text-${colors.text.primary}`}>{gpuInfo.memory_gb.toFixed(1)} GB</span>
+                <span className={`text-sm text-gray-600 dark:text-slate-300`}>Memory</span>
+                <span className={`text-sm font-medium text-gray-900 dark:text-slate-100`}>{gpuInfo.memory_gb.toFixed(1)} GB</span>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className={`text-sm text-${colors.text.secondary}`}>CUDA</span>
+                <span className={`text-sm text-gray-600 dark:text-slate-300`}>CUDA</span>
                 <span className={`text-sm font-medium ${gpuInfo.cuda_available ? 'text-green-500' : 'text-gray-500'}`}>
                   {gpuInfo.cuda_available ? 'Available' : 'Not Available'}
                 </span>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className={`text-sm text-${colors.text.secondary}`}>ROCm</span>
+                <span className={`text-sm text-gray-600 dark:text-slate-300`}>ROCm</span>
                 <span className={`text-sm font-medium ${gpuInfo.rocm_available ? 'text-purple-500' : 'text-gray-500'}`}>
                   {gpuInfo.rocm_available ? 'Available' : 'Not Available'}
                 </span>

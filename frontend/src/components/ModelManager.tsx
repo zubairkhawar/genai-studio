@@ -71,7 +71,7 @@ export function ModelManager({}: ModelManagerProps) {
           setIsOpen(true);
           fetchModels();
         }}
-        className={`p-2 rounded-lg transition-all duration-200 ${colors.button.ghost} hover:scale-105 group relative`}
+        className={`p-2 rounded-lg transition-all duration-200 bg-gray-50 dark:bg-slate-700/50 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-600/50 hover:scale-105 group relative`}
         title="Manage AI Models - Load/Unload models to optimize memory usage"
       >
         <Settings className="h-5 w-5" />
@@ -87,7 +87,7 @@ export function ModelManager({}: ModelManagerProps) {
             onClick={() => setIsOpen(false)}
           />
           
-          <div className={`relative w-full max-w-4xl max-h-[80vh] overflow-hidden rounded-2xl ${colors.card} animate-slide-up`}>
+          <div className={`relative w-full max-w-4xl max-h-[80vh] overflow-hidden rounded-2xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 animate-slide-up`}>
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">

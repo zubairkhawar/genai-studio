@@ -15,7 +15,7 @@ export function Topbar({ title, sidebarExpanded = false }: TopbarProps) {
 
   return (
     <header 
-      className={`fixed top-0 right-0 z-20 ${colors.bg.secondary} ${colors.text.primary} border-b ${colors.border} transition-all duration-300 ease-in-out`} 
+      className={`fixed top-0 right-0 z-20 bg-white dark:bg-slate-800/50 text-gray-900 dark:text-slate-100 border-b border-gray-200 dark:border-slate-700 transition-all duration-300 ease-in-out`} 
       style={{ left: sidebarExpanded ? '16rem' : '4rem' }}
     >
       <div className="h-14 px-4 flex items-center justify-between">

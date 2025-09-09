@@ -113,7 +113,7 @@ export default function Page() {
         <button 
           onClick={() => { fetchSettings(); fetchModels(); }} 
           disabled={loadingModels}
-          className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-accent-blue/30 text-accent-blue hover:bg-accent-blue/10 transition-all duration-200 hover:scale-105"
+          className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-600 text-accent-blue hover:bg-accent-blue/10 transition-all duration-200 hover:scale-105"
         >
           <RefreshCw className={`h-4 w-4 ${loadingModels ? 'animate-spin' : ''}`} />
           <span className="text-sm font-medium">Refresh</span>
@@ -130,7 +130,7 @@ export default function Page() {
       )}
 
       {/* Primary Models Section */}
-      <div className={`p-6 rounded-2xl border shadow-xl bg-white dark:bg-gradient-to-br dark:from-dark-card/90 dark:to-dark-bg-secondary/50 backdrop-blur-md`}>
+      <div className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-xl bg-white dark:bg-gradient-to-br dark:from-slate-900/90 dark:to-slate-800/50 backdrop-blur-md`}>
         <div className="flex items-center space-x-3 mb-6">
           <div className="p-2 rounded-xl bg-accent-green/10">
             <Zap className="h-6 w-6 text-accent-green" />
@@ -147,7 +147,7 @@ export default function Page() {
             <div className={`p-6 rounded-xl border-2 transition-all duration-300 ${
               primaryVideoModel.loaded
                 ? 'border-accent-green/50 bg-accent-green/5'
-                : 'border-gray-200 dark:border-gray-700 hover:border-accent-blue/50'
+                : 'border-gray-200 dark:border-slate-600 hover:border-accent-blue/50'
             }`}>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -223,7 +223,7 @@ export default function Page() {
             <div className={`p-6 rounded-xl border-2 transition-all duration-300 ${
               primaryAudioModel.loaded
                 ? 'border-accent-green/50 bg-accent-green/5'
-                : 'border-gray-200 dark:border-gray-700 hover:border-accent-violet/50'
+                : 'border-gray-200 dark:border-slate-600 hover:border-accent-violet/50'
             }`}>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -297,7 +297,7 @@ export default function Page() {
       </div>
 
       {/* System Information */}
-      <div className={`p-6 rounded-2xl border shadow-xl bg-white dark:bg-gradient-to-br dark:from-dark-card/90 dark:to-dark-bg-secondary/50 backdrop-blur-md`}>
+      <div className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-xl bg-white dark:bg-gradient-to-br dark:from-slate-900/90 dark:to-slate-800/50 backdrop-blur-md`}>
         <div className="flex items-center space-x-3 mb-6">
           <div className="p-2 rounded-xl bg-accent-green/10">
             <SettingsIcon className="h-6 w-6 text-accent-green" />
