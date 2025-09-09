@@ -30,8 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for serving generated media
-app.mount("/outputs", StaticFiles(directory="../outputs"), name="outputs")
+# Static file mounting will be done at the end after all routes are defined
 
 # Initialize components
 gpu_detector = GPUDetector()
@@ -205,6 +204,56 @@ async def get_all_jobs():
     """Get all jobs"""
     return job_queue.get_all_jobs()
 
+@app.get("/outputs/videos")
+async def get_video_outputs():
+    """Get list of generated video files"""
+    try:
+        videos_dir = pathlib.Path('../outputs/videos')
+        if not videos_dir.exists():
+            return {"videos": []}
+        
+        videos = []
+        for file_path in videos_dir.iterdir():
+            if file_path.is_file() and file_path.suffix in ['.mp4', '.avi', '.mov', '.webm']:
+                videos.append({
+                    "filename": file_path.name,
+                    "path": f"/outputs/videos/{file_path.name}",
+                    "size": file_path.stat().st_size,
+                    "created": file_path.stat().st_ctime
+                })
+        
+        # Sort by creation time (newest first)
+        videos.sort(key=lambda x: x["created"], reverse=True)
+        return {"videos": videos}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/outputs/audio")
+async def get_audio_outputs():
+    """Get list of generated audio files"""
+    try:
+        audio_dir = pathlib.Path('../outputs/audio')
+        if not audio_dir.exists():
+            return {"audio": []}
+        
+        audio_files = []
+        for file_path in audio_dir.iterdir():
+            if file_path.is_file() and file_path.suffix in ['.wav', '.mp3', '.m4a', '.flac']:
+                audio_files.append({
+                    "filename": file_path.name,
+                    "path": f"/outputs/audio/{file_path.name}",
+                    "size": file_path.stat().st_size,
+                    "created": file_path.stat().st_ctime
+                })
+        
+        # Sort by creation time (newest first)
+        audio_files.sort(key=lambda x: x["created"], reverse=True)
+        return {"audio": audio_files}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/job/{job_id}")
 async def cancel_job(job_id: str):
     """Cancel a job"""
@@ -302,6 +351,9 @@ async def generate_audio(job_id: str, request: GenerationRequest):
             "status": "failed",
             "error": str(e)
         })
+
+# Mount static files for serving generated media (after all API routes)
+app.mount("/outputs", StaticFiles(directory="../outputs"), name="outputs")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
