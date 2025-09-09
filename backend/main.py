@@ -10,11 +10,13 @@ from pydantic import BaseModel
 import asyncio
 from datetime import datetime
 import uuid
+import pathlib
 
 from models.video_generator import VideoGenerator
 from models.audio_generator import AudioGenerator
 from utils.gpu_detector import GPUDetector
 from utils.ffmpeg_handler import FFmpegHandler
+import shutil
 from utils.job_queue import JobQueue
 
 app = FastAPI(title="Text-to-Media Generator", version="1.0.0")
@@ -85,6 +87,59 @@ async def root():
 async def get_gpu_info():
     """Get GPU information"""
     return gpu_detector.detect_gpu()
+
+@app.get("/storage-usage")
+async def get_storage_usage():
+    """Return total bytes used by files in outputs directory"""
+    outputs_dir = pathlib.Path('../outputs')
+    total_bytes = 0
+    try:
+        if outputs_dir.exists():
+            for path in outputs_dir.rglob('*'):
+                if path.is_file():
+                    try:
+                        total_bytes += path.stat().st_size
+                    except Exception:
+                        continue
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"bytes": total_bytes}
+
+@app.get("/settings")
+async def get_settings():
+    """Return system and app settings"""
+    try:
+        usage = await get_storage_usage()
+        return {
+            "outputs_path": str(pathlib.Path('../outputs').resolve()),
+            "storage_usage_bytes": usage["bytes"],
+            "gpu_info": gpu_detector.detect_gpu(),
+            "ffmpeg_available": True,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/outputs/clear")
+async def clear_outputs():
+    """Delete all files in outputs directory"""
+    outputs_dir = pathlib.Path('../outputs')
+    if not outputs_dir.exists():
+        return {"message": "Outputs directory does not exist"}
+    try:
+        for path in outputs_dir.iterdir():
+            if path.is_file():
+                try:
+                    path.unlink()
+                except Exception:
+                    continue
+            elif path.is_dir():
+                try:
+                    shutil.rmtree(path)
+                except Exception:
+                    continue
+        return {"message": "Outputs cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/models")
 async def get_available_models():
