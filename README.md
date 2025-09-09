@@ -73,11 +73,28 @@ A modern, AI-powered desktop/web application for generating video and audio from
    - Open http://localhost:3000 in your browser
    - Backend API runs on http://localhost:8000
 
-### One-Click Setup (Coming Soon)
+### One-Click Setup
 ```bash
 # Cross-platform setup script
 ./setup.sh  # Linux/macOS
 setup.bat   # Windows
+```
+
+**Quick Start:**
+```bash
+# Clone and setup
+git clone https://github.com/zubairkhawar/genai-studio.git
+cd genai-studio
+
+# Run setup (choose your platform)
+./setup.sh      # Linux/macOS
+# OR
+setup.bat       # Windows
+
+# Start the application
+./start.sh      # Linux/macOS
+# OR
+start.bat       # Windows
 ```
 
 ## 🎯 Usage
@@ -200,7 +217,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🗺️ Roadmap
 
-- [ ] **One-Click Installer**: Cross-platform setup scripts
+- [x] **One-Click Installer**: Cross-platform setup scripts ✅
+- [x] **Modern UI/UX**: Dark/light mode with glassmorphism design ✅
+- [x] **GPU Support**: NVIDIA CUDA, AMD ROCm, Apple Silicon MPS ✅
+- [x] **Job Queue System**: Asynchronous generation with progress tracking ✅
+- [x] **FFmpeg Integration**: Professional media conversion ✅
+- [x] **Model Management**: Load/unload models via web UI ✅
 - [ ] **Docker Support**: Containerized deployment
 - [ ] **Model Marketplace**: Easy model installation
 - [ ] **Batch Processing**: Multiple prompt processing

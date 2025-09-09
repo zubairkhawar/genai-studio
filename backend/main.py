@@ -158,6 +158,46 @@ async def cancel_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     return {"message": "Job cancelled"}
 
+@app.post("/models/{model_type}/{model_name}/load")
+async def load_model(model_type: str, model_name: str):
+    """Load a specific model"""
+    try:
+        if model_type not in ["video", "audio"]:
+            raise HTTPException(status_code=400, detail="model_type must be 'video' or 'audio'")
+        
+        if model_type == "video":
+            success = await video_generator.load_model(model_name)
+        else:
+            success = await audio_generator.load_model(model_name)
+        
+        if success:
+            return {"message": f"Model {model_name} loaded successfully"}
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to load model {model_name}")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/models/{model_type}/{model_name}/unload")
+async def unload_model(model_type: str, model_name: str):
+    """Unload a specific model"""
+    try:
+        if model_type not in ["video", "audio"]:
+            raise HTTPException(status_code=400, detail="model_type must be 'video' or 'audio'")
+        
+        if model_type == "video":
+            success = video_generator.unload_model(model_name)
+        else:
+            success = audio_generator.unload_model(model_name)
+        
+        if success:
+            return {"message": f"Model {model_name} unloaded successfully"}
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to unload model {model_name}")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 async def generate_video(job_id: str, request: GenerationRequest):
     """Generate video in background"""
     try:
