@@ -140,6 +140,22 @@ async def clear_outputs():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/outputs/{file_type}/{filename}")
+async def delete_output_file(file_type: str, filename: str):
+    """Delete a specific output file"""
+    if file_type not in ['videos', 'audio']:
+        return {"error": "Invalid file type"}
+    
+    file_path = pathlib.Path(f'../outputs/{file_type}/{filename}')
+    if not file_path.exists():
+        return {"error": "File not found"}
+    
+    try:
+        file_path.unlink()
+        return {"message": f"File {filename} deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/models")
 async def get_available_models():
     """Get list of available models"""
