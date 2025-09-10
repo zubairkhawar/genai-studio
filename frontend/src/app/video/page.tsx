@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Play, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2, Upload, Image as ImageIcon, Type } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 interface GenerationResult {
@@ -13,8 +13,6 @@ interface GenerationResult {
   error?: string;
   createdAt: string;
   settings: {
-    resolution: string;
-    duration: number;
     format: string;
   };
 }
@@ -25,13 +23,49 @@ export default function Page() {
   const [results, setResults] = useState<GenerationResult[]>([]);
   const [currentStep, setCurrentStep] = useState<'prompt' | 'progress' | 'results'>('prompt');
   const [settings, setSettings] = useState({
-    resolution: '1024x576',
-    duration: 4,
     format: 'mp4'
   });
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const colors = useThemeColors();
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image file size must be less than 10MB');
+        return;
+      }
+      
+      setUploadedImage(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setUploadedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const fetchJobs = async () => {
     if (currentStep !== 'progress' && currentStep !== 'results') return;
@@ -95,6 +129,12 @@ export default function Page() {
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
+    // For image-to-video mode, require an uploaded image
+    if (generationMode === 'image-to-video' && !uploadedImage) {
+      alert('Please upload an image for image-to-video generation');
+      return;
+    }
+    
     setIsGenerating(true);
     setCurrentStep('progress');
     
@@ -102,16 +142,22 @@ export default function Page() {
     setResults([]);
     
     try {
+      const formData = new FormData();
+      formData.append('prompt', prompt.trim());
+      formData.append('model_type', 'video');
+      formData.append('model_name', 'stable-video-diffusion');
+      formData.append('duration', '4'); // Optimal for SVD: 4 seconds
+      formData.append('output_format', settings.format);
+      formData.append('generation_mode', generationMode);
+      
+      // Add image if in image-to-video mode
+      if (generationMode === 'image-to-video' && uploadedImage) {
+        formData.append('image', uploadedImage);
+      }
+      
       const response = await fetch('http://localhost:8000/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          model_type: 'video',
-          model_name: 'stable-video-diffusion',
-          duration: settings.duration,
-          output_format: settings.format
-        })
+        body: formData
       });
       
       const result = await response.json();
@@ -230,14 +276,137 @@ export default function Page() {
         
         <div className="relative p-10">
           <div className="space-y-8">
-            {/* Prompt Section */}
+            {/* Generation Mode Selection */}
             <div className="space-y-4">
               <div className="flex items-center space-x-3">
                 <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-blue/10">
                   <Play className="h-5 w-5 text-accent-blue" />
-          </div>
+                </div>
                 <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
-                  Describe Your Video
+                  Choose Generation Mode
+                </h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setGenerationMode('text-to-video')}
+                  className={`p-6 rounded-2xl border-2 transition-all duration-300 text-left ${
+                    generationMode === 'text-to-video'
+                      ? 'border-accent-blue bg-accent-blue/10 shadow-lg'
+                      : 'border-gray-200 dark:border-slate-600 hover:border-accent-blue/50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
+                      generationMode === 'text-to-video' ? 'bg-accent-blue/20' : 'bg-gray-100 dark:bg-slate-700'
+                    }`}>
+                      <Type className={`h-6 w-6 ${generationMode === 'text-to-video' ? 'text-accent-blue' : 'text-gray-500'}`} />
+                    </div>
+                    <div>
+                      <h3 className={`text-lg font-bold ${colors.text.primary}`}>
+                        Text-to-Video
+                      </h3>
+                      <p className={`text-sm ${colors.text.secondary}`}>
+                        Generate video from text description only
+          </p>
+        </div>
+                  </div>
+                </button>
+                
+        <button 
+                  onClick={() => setGenerationMode('image-to-video')}
+                  className={`p-6 rounded-2xl border-2 transition-all duration-300 text-left ${
+                    generationMode === 'image-to-video'
+                      ? 'border-accent-blue bg-accent-blue/10 shadow-lg'
+                      : 'border-gray-200 dark:border-slate-600 hover:border-accent-blue/50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
+                      generationMode === 'image-to-video' ? 'bg-accent-blue/20' : 'bg-gray-100 dark:bg-slate-700'
+                    }`}>
+                      <ImageIcon className={`h-6 w-6 ${generationMode === 'image-to-video' ? 'text-accent-blue' : 'text-gray-500'}`} />
+                    </div>
+                    <div>
+                      <h3 className={`text-lg font-bold ${colors.text.primary}`}>
+                        Image-to-Video
+                      </h3>
+                      <p className={`text-sm ${colors.text.secondary}`}>
+                        Animate your own image with text prompt
+                      </p>
+                    </div>
+                  </div>
+        </button>
+              </div>
+            </div>
+
+            {/* Image Upload Section (for image-to-video mode) */}
+            {generationMode === 'image-to-video' && (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-violet/10">
+                    <Upload className="h-5 w-5 text-accent-violet" />
+                  </div>
+                  <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
+                    Upload Your Image
+                  </h2>
+      </div>
+
+                <div className="space-y-4">
+                  {!imagePreview ? (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-2xl p-8 text-center hover:border-accent-violet hover:bg-accent-violet/5 transition-all duration-300 cursor-pointer"
+                    >
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-accent-violet/10">
+                          <Upload className="h-8 w-8 text-accent-violet" />
+                        </div>
+                        <div>
+                          <p className={`text-lg font-medium ${colors.text.primary}`}>
+                            Click to upload an image
+                          </p>
+                          <p className={`text-sm ${colors.text.secondary}`}>
+                            PNG, JPG, JPEG up to 10MB
+                          </p>
+                        </div>
+                      </div>
+          </div>
+        ) : (
+                    <div className="relative">
+                      <img
+                        src={imagePreview}
+                        alt="Upload preview"
+                        className="w-full max-w-md mx-auto rounded-2xl shadow-lg"
+                      />
+                      <button
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Prompt Section */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-blue/10">
+                  <Type className="h-5 w-5 text-accent-blue" />
+                </div>
+                <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
+                  {generationMode === 'text-to-video' ? 'Describe Your Video' : 'Describe the Animation'}
                 </h2>
               </div>
 
@@ -245,7 +414,11 @@ export default function Page() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="A cinematic shot of a futuristic city at sunset, with flying cars and neon lights reflecting on glass buildings..."
+                  placeholder={
+                    generationMode === 'text-to-video' 
+                      ? "A cinematic shot of a futuristic city at sunset, with flying cars and neon lights reflecting on glass buildings..."
+                      : "Add gentle wind movement, make the clouds drift slowly, create a peaceful atmosphere..."
+                  }
                   className={`w-full px-6 py-6 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 hover:border-accent-blue/50 hover:shadow-xl resize-none text-lg leading-relaxed`}
                   rows={5}
                 />
@@ -262,14 +435,21 @@ export default function Page() {
 
               {/* Prompt Suggestions */}
               <div className="flex flex-wrap gap-3">
-                {[
+                {(generationMode === 'text-to-video' ? [
                   'cinematic lighting',
                   '4K quality',
                   'smooth camera movement',
                   'dramatic atmosphere',
                   'highly detailed',
                   'professional grade'
-                ].map((suggestion) => (
+                ] : [
+                  'gentle movement',
+                  'smooth animation',
+                  'natural motion',
+                  'subtle effects',
+                  'flowing motion',
+                  'dynamic elements'
+                ]).map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
@@ -297,7 +477,7 @@ export default function Page() {
                       Video Settings
                     </h3>
                     <p className={`text-sm ${colors.text.secondary}`}>
-                      Customize resolution, duration, and format
+                      Optimized settings for best quality
                     </p>
                   </div>
                 </div>
@@ -310,59 +490,36 @@ export default function Page() {
               
               {showSettings && (
                 <div className={`p-6 rounded-2xl border border-accent-blue/20 bg-white dark:bg-slate-800/30 backdrop-blur-md animate-slide-down`}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* Resolution */}
-                    <div className="space-y-3">
-                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Resolution
-                      </label>
-                      <select
-                        value={settings.resolution}
-                        onChange={(e) => setSettings(prev => ({ ...prev, resolution: e.target.value }))}
-                        className={`w-full px-4 py-4 bg-white dark:bg-slate-700/50 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-200 text-gray-900 dark:text-slate-100 font-medium`}
-                      >
-                        <option value="512x512">512×512 (Square)</option>
-                        <option value="768x512">768×512 (Landscape)</option>
-                        <option value="1024x576">1024×576 (HD)</option>
-                        <option value="1280x720">1280×720 (HD)</option>
-                        <option value="1920x1080">1920×1080 (Full HD)</option>
-                      </select>
-                    </div>
-
-                    {/* Duration */}
-                    <div className="space-y-3">
-                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Duration: {settings.duration}s
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="range"
-                          min="1"
-                          max="30"
-                          value={settings.duration}
-                          onChange={(e) => setSettings(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
-                          className="w-full h-3 bg-gradient-to-r from-accent-blue to-accent-violet rounded-lg appearance-none cursor-pointer slider"
-                        />
-                        <div className="flex justify-between text-xs text-gray-500 mt-2 font-medium">
-                          <span>1s</span>
-                          <span>30s</span>
+                  <div className="space-y-6">
+                    {/* Optimal Settings Info */}
+                    <div className="p-4 rounded-xl bg-accent-blue/10 border border-accent-blue/20">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-blue/20">
+                          <CheckCircle className="h-5 w-5 text-accent-blue" />
+                        </div>
+                        <div>
+                          <h4 className={`font-semibold ${colors.text.primary} mb-1`}>
+                            Optimized for SVD Model
+                          </h4>
+                          <p className={`text-sm ${colors.text.secondary}`}>
+                            Resolution: 576×1024 (optimal for SVD) • Duration: 4 seconds (best quality)
+                          </p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Format */}
+                    {/* Format Selection */}
                     <div className="space-y-3">
                       <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Format
+                        Output Format
                       </label>
                       <select
                         value={settings.format}
                         onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
                         className={`w-full px-4 py-4 bg-white dark:bg-slate-700/50 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-200 text-gray-900 dark:text-slate-100 font-medium`}
                       >
-                        <option value="mp4">MP4 (Universal)</option>
+                        <option value="mp4">MP4 (Universal - Recommended)</option>
                         <option value="webm">WebM (Web optimized)</option>
-                        <option value="avi">AVI (Legacy)</option>
                         <option value="mov">MOV (QuickTime)</option>
                       </select>
                     </div>
@@ -375,14 +532,34 @@ export default function Page() {
             <div className="pt-4">
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim()}
+                disabled={!prompt.trim() || (generationMode === 'image-to-video' && !uploadedImage)}
                 className="group relative w-full flex items-center justify-center space-x-4 px-10 py-6 bg-gradient-to-r from-accent-blue to-accent-violet text-white rounded-2xl font-bold text-xl hover:from-accent-blue/90 hover:to-accent-violet/90 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-2xl hover:shadow-accent-blue/25"
               >
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-accent-blue to-accent-violet opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
                 <Play className="h-7 w-7 group-hover:scale-110 transition-transform duration-300" />
-                <span>Generate Video</span>
+                <span>
+                  {generationMode === 'text-to-video' ? 'Generate Video from Text' : 'Animate Image to Video'}
+                </span>
                 <div className="absolute inset-0 rounded-2xl border-2 border-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </button>
+              
+              {/* Reset Button */}
+              <div className="mt-4 text-center">
+                <button
+                  onClick={() => {
+                    setPrompt('');
+                    setUploadedImage(null);
+                    setImagePreview(null);
+                    setGenerationMode('text-to-video');
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                  className="px-6 py-2 text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors text-sm font-medium"
+                >
+                  Reset Form
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -409,8 +586,19 @@ export default function Page() {
           <div className="space-y-6">
             {/* Prompt Display */}
             <div className="text-left">
-              <p className={`text-sm ${colors.text.secondary} mb-2`}>Generating:</p>
+              <p className={`text-sm ${colors.text.secondary} mb-2`}>
+                {generationMode === 'text-to-video' ? 'Generating from text:' : 'Animating image:'}
+              </p>
               <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
+              {generationMode === 'image-to-video' && imagePreview && (
+                <div className="mt-3">
+                  <img
+                    src={imagePreview}
+                    alt="Source image"
+                    className="w-32 h-20 object-cover rounded-lg shadow-md"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Status */}
@@ -432,18 +620,22 @@ export default function Page() {
 
             {/* Settings Display */}
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">Resolution:</span>
-                  <p className="font-medium">{currentResult.settings.resolution}</p>
+                  <p className="font-medium">576×1024 (SVD Optimal)</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Duration:</span>
-                  <p className="font-medium">{currentResult.settings.duration}s</p>
+                  <p className="font-medium">4s (Best Quality)</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Format:</span>
                   <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Model:</span>
+                  <p className="font-medium">Stable Video Diffusion</p>
                 </div>
               </div>
             </div>
@@ -472,8 +664,20 @@ export default function Page() {
           <div className="space-y-6">
             {/* Prompt Display */}
             <div>
-              <p className={`text-sm ${colors.text.secondary} mb-2`}>Generated:</p>
+              <p className={`text-sm ${colors.text.secondary} mb-2`}>
+                {generationMode === 'text-to-video' ? 'Generated from text:' : 'Animated from image:'}
+              </p>
               <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
+              {generationMode === 'image-to-video' && imagePreview && (
+                <div className="mt-3">
+                  <p className={`text-sm ${colors.text.secondary} mb-2`}>Source image:</p>
+                  <img
+                    src={imagePreview}
+                    alt="Source image"
+                    className="w-32 h-20 object-cover rounded-lg shadow-md"
+                  />
+                </div>
+              )}
             </div>
 
               {/* Video Preview */}
@@ -498,18 +702,22 @@ export default function Page() {
 
             {/* Settings Display */}
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-                <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-500">Resolution:</span>
-                  <p className="font-medium">{currentResult.settings.resolution}</p>
+                  <p className="font-medium">576×1024 (SVD Optimal)</p>
                   </div>
                   <div>
                     <span className="text-gray-500">Duration:</span>
-                  <p className="font-medium">{currentResult.settings.duration}s</p>
+                  <p className="font-medium">4s (Best Quality)</p>
                   </div>
                   <div>
                     <span className="text-gray-500">Format:</span>
                   <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Model:</span>
+                  <p className="font-medium">Stable Video Diffusion</p>
                   </div>
                 </div>
               </div>
@@ -528,15 +736,21 @@ export default function Page() {
               )}
                   <button
                     onClick={() => {
-                  setPrompt('');
-                  setCurrentStep('prompt');
-                  setCurrentJobId(null);
-                  setResults([]);
-                }}
-                className="flex items-center justify-center space-x-2 px-6 py-3 border border-accent-blue/30 text-accent-blue rounded-lg hover:bg-accent-blue/10 transition-colors"
-              >
-                <RefreshCw className="h-5 w-5" />
-                <span>Generate Another</span>
+                      setPrompt('');
+                      setUploadedImage(null);
+                      setImagePreview(null);
+                      setGenerationMode('text-to-video');
+                      setCurrentStep('prompt');
+                      setCurrentJobId(null);
+                      setResults([]);
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = '';
+                      }
+                    }}
+                    className="flex items-center justify-center space-x-2 px-6 py-3 border border-accent-blue/30 text-accent-blue rounded-lg hover:bg-accent-blue/10 transition-colors"
+                  >
+                    <RefreshCw className="h-5 w-5" />
+                    <span>Generate Another</span>
                   </button>
             </div>
           </div>

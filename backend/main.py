@@ -48,6 +48,7 @@ class GenerationRequest(BaseModel):
     duration: Optional[int] = 5  # for video
     sample_rate: Optional[int] = 22050  # for audio
     output_format: str = "mp4"  # mp4, wav, mp3
+    voice_style: Optional[str] = "auto"  # for audio voice selection
 
 class GenerationResponse(BaseModel):
     job_id: str
@@ -270,6 +271,30 @@ async def get_audio_outputs():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/voice-previews")
+async def get_voice_previews():
+    """Get list of available voice preview files"""
+    try:
+        previews_dir = pathlib.Path('../outputs/voice-previews')
+        if not previews_dir.exists():
+            return {"previews": []}
+        
+        preview_files = []
+        for file_path in previews_dir.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() == '.wav':
+                # Extract voice style from filename (e.g., "professional-preview.wav" -> "professional")
+                voice_style = file_path.stem.replace('-preview', '')
+                preview_files.append({
+                    "voice_style": voice_style,
+                    "filename": file_path.name,
+                    "size": file_path.stat().st_size,
+                    "url": f"/outputs/voice-previews/{file_path.name}"
+                })
+        
+        return {"previews": sorted(preview_files, key=lambda x: x["voice_style"])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/job/{job_id}")
 async def cancel_job(job_id: str):
     """Cancel a job"""
@@ -353,7 +378,8 @@ async def generate_audio(job_id: str, request: GenerationRequest):
             prompt=request.prompt,
             model_name=request.model_name,
             sample_rate=request.sample_rate,
-            output_format=request.output_format
+            output_format=request.output_format,
+            voice_style=request.voice_style
         )
         
         job_queue.update_job(job_id, {

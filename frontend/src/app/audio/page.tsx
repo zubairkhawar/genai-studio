@@ -13,9 +13,8 @@ interface GenerationResult {
   error?: string;
   createdAt: string;
   settings: {
-    voice: string;
-    sampleRate: number;
     format: string;
+    voiceStyle: string;
   };
 }
 
@@ -25,13 +24,14 @@ export default function Page() {
   const [results, setResults] = useState<GenerationResult[]>([]);
   const [currentStep, setCurrentStep] = useState<'prompt' | 'progress' | 'results'>('prompt');
   const [settings, setSettings] = useState({
-    voice: 'default',
-    sampleRate: 22050,
-    format: 'wav'
+    format: 'wav',
+    voiceStyle: 'auto'
   });
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [voicePreviews, setVoicePreviews] = useState<{[key: string]: string}>({});
+  const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const colors = useThemeColors();
 
   const fetchJobs = async () => {
@@ -85,6 +85,39 @@ export default function Page() {
     }
   };
 
+  const fetchVoicePreviews = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/voice-previews');
+      const data = await response.json();
+      
+      const previewMap: {[key: string]: string} = {};
+      data.previews.forEach((preview: any) => {
+        previewMap[preview.voice_style] = `http://localhost:8000${preview.url}`;
+      });
+      
+      setVoicePreviews(previewMap);
+    } catch (error) {
+      console.error('Error fetching voice previews:', error);
+    }
+  };
+
+  const playVoicePreview = async (voiceStyle: string) => {
+    if (playingPreview === voiceStyle) {
+      setPlayingPreview(null);
+      return;
+    }
+
+    setPlayingPreview(voiceStyle);
+    
+    const audioUrl = voicePreviews[voiceStyle];
+    if (audioUrl) {
+      const audio = new Audio(audioUrl);
+      audio.onended = () => setPlayingPreview(null);
+      audio.onerror = () => setPlayingPreview(null);
+      await audio.play();
+    }
+  };
+
   useEffect(() => {
     if (currentStep === 'progress' || currentStep === 'results') {
     fetchJobs();
@@ -92,6 +125,10 @@ export default function Page() {
     return () => clearInterval(interval);
     }
   }, [currentStep, currentJobId]);
+
+  useEffect(() => {
+    fetchVoicePreviews();
+  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -110,8 +147,9 @@ export default function Page() {
           prompt: prompt.trim(),
           model_type: 'audio',
           model_name: 'bark',
-          sample_rate: settings.sampleRate,
-          output_format: settings.format
+          sample_rate: 22050, // Optimal for Bark
+          output_format: settings.format,
+          voice_style: settings.voiceStyle
         })
       });
       
@@ -315,7 +353,7 @@ export default function Page() {
                       Audio Settings
                     </h3>
                     <p className={`text-sm ${colors.text.secondary}`}>
-                      Customize voice, quality, and format
+                      Optimized settings for best quality
                     </p>
                   </div>
                 </div>
@@ -328,66 +366,118 @@ export default function Page() {
               
               {showSettings && (
                 <div className={`p-6 rounded-2xl border border-accent-violet/20 bg-white dark:bg-slate-800/30 backdrop-blur-md animate-slide-down`}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* Voice */}
-                    <div className="space-y-3">
-                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Voice Type
-                      </label>
-                      <select
-                        value={settings.voice}
-                        onChange={(e) => setSettings(prev => ({ ...prev, voice: e.target.value }))}
-                        className={`w-full px-4 py-4 bg-white dark:bg-slate-700/50 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-4 focus:ring-accent-violet/20 focus:border-accent-violet transition-all duration-200 text-gray-900 dark:text-slate-100 font-medium`}
-                      >
-                        <option value="default">Default Voice</option>
-                        <option value="male">Male Voice</option>
-                        <option value="female">Female Voice</option>
-                        <option value="child">Child Voice</option>
-                        <option value="elderly">Elderly Voice</option>
-                        <option value="narrator">Narrator Voice</option>
-                      </select>
-                    </div>
-
-                    {/* Sample Rate */}
-                    <div className="space-y-3">
-                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Quality: {settings.sampleRate}Hz
-                      </label>
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          { value: 16000, label: '16kHz', desc: 'Low quality', color: 'bg-gray-100 text-gray-600' },
-                          { value: 22050, label: '22kHz', desc: 'Standard', color: 'bg-accent-violet/10 text-accent-violet' },
-                          { value: 44100, label: '44kHz', desc: 'CD quality', color: 'bg-accent-blue/10 text-accent-blue' },
-                          { value: 48000, label: '48kHz', desc: 'Studio', color: 'bg-accent-green/10 text-accent-green' }
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setSettings(prev => ({ ...prev, sampleRate: option.value }))}
-                            className={`p-4 rounded-xl border-2 text-center transition-all duration-200 hover:scale-105 ${
-                              settings.sampleRate === option.value
-                                ? 'border-accent-violet bg-accent-violet/10 text-accent-violet shadow-lg'
-                                : `${colors.border} hover:border-accent-violet/50 hover:bg-accent-violet/5`
-                            }`}
-                          >
-                            <div className="font-bold text-lg">{option.label}</div>
-                            <div className="text-xs text-gray-500 mt-1">{option.desc}</div>
-                          </button>
-                        ))}
+                  <div className="space-y-6">
+                    {/* Optimal Settings Info */}
+                    <div className="p-4 rounded-xl bg-accent-violet/10 border border-accent-violet/20">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-violet/20">
+                          <CheckCircle className="h-5 w-5 text-accent-violet" />
+                        </div>
+                        <div>
+                          <h4 className={`font-semibold ${colors.text.primary} mb-1`}>
+                            Optimized for Bark Model
+                          </h4>
+                          <p className={`text-sm ${colors.text.secondary}`}>
+                            Sample Rate: 22,050 Hz (Bark optimal) • Quality: High
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Format */}
+                    {/* Voice Style Selection */}
                     <div className="space-y-3">
                       <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Format
+                        Voice Style
+                      </label>
+                      
+                      {/* Voice Style Options */}
+                      <div className="space-y-2">
+                        {[
+                          { value: 'auto', label: 'Auto (Recommended)', description: 'Smart voice detection' },
+                          { value: 'professional', label: 'Professional', description: 'Business, formal tone' },
+                          { value: 'casual', label: 'Casual', description: 'Friendly, conversational' },
+                          { value: 'storytelling', label: 'Storytelling', description: 'Narrative, engaging' },
+                          { value: 'character', label: 'Character', description: 'Distinctive, animated' },
+                          { value: 'male', label: 'Male Voice', description: 'Deep, masculine tone' },
+                          { value: 'female', label: 'Female Voice', description: 'Clear, feminine tone' },
+                          { value: 'child', label: 'Child Voice', description: 'Young, energetic' },
+                          { value: 'narrator', label: 'Narrator', description: 'Clear, authoritative' }
+                        ].map((option) => (
+                          <div
+                            key={option.value}
+                            className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                              settings.voiceStyle === option.value
+                                ? 'border-accent-violet bg-accent-violet/10'
+                                : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 hover:border-accent-violet/50'
+                            }`}
+                            onClick={() => setSettings(prev => ({ ...prev, voiceStyle: option.value }))}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-4 h-4 rounded-full border-2 ${
+                                  settings.voiceStyle === option.value
+                                    ? 'border-accent-violet bg-accent-violet'
+                                    : 'border-gray-300 dark:border-slate-500'
+                                }`}>
+                                  {settings.voiceStyle === option.value && (
+                                    <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className={`font-medium ${colors.text.primary}`}>
+                                    {option.label}
+                                  </p>
+                                  <p className={`text-xs ${colors.text.secondary}`}>
+                                    {option.description}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Play Button */}
+                            {option.value !== 'auto' && voicePreviews[option.value] && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  playVoicePreview(option.value);
+                                }}
+                                className={`ml-3 p-2 rounded-lg transition-all duration-200 ${
+                                  playingPreview === option.value
+                                    ? 'bg-accent-violet text-white'
+                                    : 'bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-slate-300 hover:bg-accent-violet hover:text-white'
+                                }`}
+                                title={`Preview ${option.label} voice`}
+                              >
+                                {playingPreview === option.value ? (
+                                  <Pause className="h-4 w-4" />
+                                ) : (
+                                  <Play className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <p className={`text-xs ${colors.text.secondary} mt-2`}>
+                        {settings.voiceStyle === 'auto' 
+                          ? 'Bark will automatically select the best voice based on your text content'
+                          : `Selected voice style will guide Bark's voice selection for your text. Click play to preview.`
+                        }
+                      </p>
+                    </div>
+
+                    {/* Format Selection */}
+                    <div className="space-y-3">
+                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
+                        Output Format
                       </label>
                       <select
                         value={settings.format}
                         onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
                         className={`w-full px-4 py-4 bg-white dark:bg-slate-700/50 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-4 focus:ring-accent-violet/20 focus:border-accent-violet transition-all duration-200 text-gray-900 dark:text-slate-100 font-medium`}
                       >
-                        <option value="wav">WAV (Uncompressed)</option>
+                        <option value="wav">WAV (Uncompressed - Recommended)</option>
                         <option value="mp3">MP3 (Compressed)</option>
                         <option value="flac">FLAC (Lossless)</option>
                         <option value="ogg">OGG (Open source)</option>
@@ -459,18 +549,24 @@ export default function Page() {
 
             {/* Settings Display */}
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Voice:</span>
-                  <p className="font-medium">{currentResult.settings.voice}</p>
-                </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">Sample Rate:</span>
-                  <p className="font-medium">{currentResult.settings.sampleRate}Hz</p>
+                  <p className="font-medium">22,050 Hz (Bark Optimal)</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Voice Style:</span>
+                  <p className="font-medium">
+                    {currentResult.settings.voiceStyle === 'auto' ? 'Auto-detected' : currentResult.settings.voiceStyle}
+                  </p>
                 </div>
                 <div>
                   <span className="text-gray-500">Format:</span>
                   <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Model:</span>
+                  <p className="font-medium">Bark TTS</p>
                 </div>
               </div>
             </div>
@@ -541,21 +637,27 @@ export default function Page() {
 
             {/* Settings Display */}
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Voice:</span>
-                  <p className="font-medium">{currentResult.settings.voice}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Sample Rate:</span>
-                  <p className="font-medium">{currentResult.settings.sampleRate}Hz</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Format:</span>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Sample Rate:</span>
+                  <p className="font-medium">22,050 Hz (Bark Optimal)</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Voice Style:</span>
+                  <p className="font-medium">
+                    {currentResult.settings.voiceStyle === 'auto' ? 'Auto-detected' : currentResult.settings.voiceStyle}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Format:</span>
                   <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
-                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-500">Model:</span>
+                  <p className="font-medium">Bark TTS</p>
                 </div>
               </div>
+            </div>
 
               {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
