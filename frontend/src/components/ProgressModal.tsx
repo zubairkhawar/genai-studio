@@ -16,6 +16,7 @@ interface ModelProgress {
 interface ProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRetry?: () => void;
   title: string;
   description: string;
   progress: number;
@@ -30,6 +31,7 @@ interface ProgressModalProps {
 export function ProgressModal({
   isOpen,
   onClose,
+  onRetry,
   title,
   description,
   progress,
@@ -71,7 +73,7 @@ export function ProgressModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed top-0 left-0 right-0 bottom-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" style={{ width: '100vw', height: '100vh' }}>
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-slide-up">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -254,7 +256,7 @@ export function ProgressModal({
               Close
             </button>
             <button
-              onClick={() => window.location.reload()}
+              onClick={onRetry || onClose}
               className="flex-1 px-4 py-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue-light transition-colors"
             >
               Retry

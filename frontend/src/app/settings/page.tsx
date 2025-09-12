@@ -642,6 +642,7 @@ export default function Page() {
       <ProgressModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
+        onRetry={modalType === 'download' ? startDownload : undefined}
         title={modalType === 'download' ? 'Downloading AI Models' : 'Deleting AI Models'}
         description={modalType === 'download' 
           ? 'Downloading the latest AI models for optimal performance' 
