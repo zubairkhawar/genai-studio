@@ -115,6 +115,15 @@ export default function Page() {
   };
 
   const startDownload = async () => {
+    // First, cleanup any existing download state
+    try {
+      await fetch('http://localhost:8000/download-cleanup', {
+        method: 'POST',
+      });
+    } catch (cleanupError) {
+      console.warn('Cleanup failed, continuing with download:', cleanupError);
+    }
+    
     // Clear any previous download status and show initial state
     setDownloadStatus({
       is_downloading: true,
@@ -169,6 +178,66 @@ export default function Page() {
         }, 1000);
       } else {
         const errorData = await response.json();
+        
+        // If it's a "Download already in progress" error, try to cleanup and retry
+        if (response.status === 400 && errorData.detail?.includes("already in progress")) {
+          console.log("Download already in progress, cleaning up and retrying...");
+          
+          // Cleanup and retry once
+          try {
+            await fetch('http://localhost:8000/download-cleanup', {
+              method: 'POST',
+            });
+            
+            // Wait a moment for cleanup to complete
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Retry the download
+            const retryResponse = await fetch('http://localhost:8000/download-models', {
+              method: 'POST',
+            });
+            
+            if (retryResponse.ok) {
+              // Start polling for the retry
+              const pollInterval = setInterval(async () => {
+                try {
+                  const response = await fetch('http://localhost:8000/download-status');
+                  const downloadStatus = await response.json();
+                  
+                  setDownloadStatus(downloadStatus);
+                  
+                  if (downloadStatus.status === 'completed') {
+                    clearInterval(pollInterval);
+                    
+                    try {
+                      const loadResponse = await fetch('http://localhost:8000/load-models', {
+                        method: 'POST',
+                      });
+                      if (loadResponse.ok) {
+                        console.log('Models loaded successfully');
+                      } else {
+                        console.error('Failed to load models');
+                      }
+                    } catch (err) {
+                      console.error('Error loading models:', err);
+                    }
+                    
+                    await fetchModels();
+                  } else if (downloadStatus.status === 'error') {
+                    clearInterval(pollInterval);
+                  }
+                } catch (pollError) {
+                  console.error('Error polling download status:', pollError);
+                }
+              }, 1000);
+              
+              return; // Exit early since we're handling the retry
+            }
+          } catch (retryError) {
+            console.error('Retry failed:', retryError);
+          }
+        }
+        
         setDownloadStatus({
           is_downloading: false,
           progress: 0,
@@ -191,6 +260,15 @@ export default function Page() {
   };
 
   const deleteModels = async () => {
+    // First, cleanup any existing download state
+    try {
+      await fetch('http://localhost:8000/download-cleanup', {
+        method: 'POST',
+      });
+    } catch (cleanupError) {
+      console.warn('Cleanup failed, continuing with delete:', cleanupError);
+    }
+    
     try {
       const response = await fetch('http://localhost:8000/delete-models', {
         method: 'POST',
@@ -216,6 +294,16 @@ export default function Page() {
     fetchSettings();
     fetchModels();
     fetchDownloadStatus();
+    
+    // Cleanup function to reset download status when component unmounts
+    return () => {
+      // Only cleanup if download is in progress
+      if (downloadStatus.is_downloading) {
+        fetch('http://localhost:8000/download-cleanup', {
+          method: 'POST',
+        }).catch(err => console.warn('Cleanup on unmount failed:', err));
+      }
+    };
   }, []);
 
   const clearOutputs = async () => {
@@ -386,7 +474,31 @@ export default function Page() {
                   <div className="w-4 h-4 border-2 border-accent-blue border-t-transparent rounded-full animate-spin"></div>
                   <span className="font-medium text-accent-blue">Downloading Models...</span>
                 </div>
-                <span className="text-sm font-mono text-accent-blue">{downloadStatus.progress}%</span>
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm font-mono text-accent-blue">{downloadStatus.progress}%</span>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetch('http://localhost:8000/download-cleanup', {
+                          method: 'POST',
+                        });
+                        setDownloadStatus({
+                          is_downloading: false,
+                          progress: 0,
+                          current_model: "",
+                          status: "idle",
+                          message: "",
+                          error: null
+                        });
+                      } catch (err) {
+                        console.error('Failed to cancel download:', err);
+                      }
+                    }}
+                    className="px-3 py-1 text-xs bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
               
               <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-3">

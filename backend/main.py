@@ -447,6 +447,32 @@ async def get_download_status():
     """Get current download status"""
     return download_status
 
+@app.post("/download-cleanup")
+async def cleanup_download_status():
+    """Reset download status (useful when download is interrupted)"""
+    global download_status
+    
+    download_status.update({
+        "is_downloading": False,
+        "progress": 0,
+        "current_model": "",
+        "status": "idle",
+        "message": "",
+        "error": None
+    })
+    
+    # Reset model statuses
+    for model_id in download_status["models"]:
+        download_status["models"][model_id].update({
+            "downloaded_mb": 0,
+            "progress": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "status": "pending"
+        })
+    
+    return {"message": "Download status cleaned up successfully"}
+
 @app.post("/download-models")
 async def download_models(background_tasks: BackgroundTasks):
     """Start downloading all models"""
