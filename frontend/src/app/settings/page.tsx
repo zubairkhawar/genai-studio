@@ -206,6 +206,20 @@ export default function Page() {
               progress: 100
             })));
             
+            // Load models after download completion
+            try {
+              const loadResponse = await fetch('http://localhost:8000/load-models', {
+                method: 'POST',
+              });
+              if (loadResponse.ok) {
+                console.log('Models loaded successfully');
+              } else {
+                console.error('Failed to load models');
+              }
+            } catch (err) {
+              console.error('Error loading models:', err);
+            }
+            
             // Refresh models after download
             await fetchModels();
           } else if (downloadStatus.status === 'error') {

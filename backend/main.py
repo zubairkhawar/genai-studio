@@ -85,13 +85,12 @@ async def startup_event():
     gpu_info = gpu_detector.detect_gpu()
     print(f"Detected GPU: {gpu_info}")
     
-    # Initialize generators
+    # Initialize generators (but don't load models yet)
     video_generator = VideoGenerator(gpu_info)
     audio_generator = AudioGenerator(gpu_info)
     
-    # Load default models
-    await video_generator.load_default_models()
-    await audio_generator.load_default_models()
+    print("Backend started successfully. Models will be loaded when requested.")
+    print("Use the 'Download Models' button in the UI to download and load models.")
 
 @app.get("/")
 async def root():
@@ -489,9 +488,8 @@ def download_models_background():
             "error": None
         })
         
-        # Restart models after download
-        time.sleep(2)  # Give time for files to be written
-        restart_models()
+        # Models downloaded successfully - they will be loaded when requested
+        print("Models downloaded successfully. Use the UI to load them when ready.")
         
     except Exception as e:
         download_status.update({
@@ -500,6 +498,24 @@ def download_models_background():
             "message": f"Download failed: {str(e)}",
             "error": str(e)
         })
+
+@app.post("/load-models")
+async def load_models():
+    """Load models after download is complete"""
+    try:
+        global video_generator, audio_generator
+        
+        print("Loading models after download completion...")
+        
+        # Load video models
+        await video_generator.load_default_models()
+        
+        # Load audio models  
+        await audio_generator.load_default_models()
+        
+        return {"message": "Models loaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load models: {str(e)}")
 
 def restart_models():
     """Restart model loading after download"""
