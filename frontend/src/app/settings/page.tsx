@@ -102,6 +102,16 @@ export default function Page() {
   };
 
   const startDownload = async () => {
+    // Clear any previous download status
+    setDownloadStatus({
+      is_downloading: false,
+      progress: 0,
+      current_model: '',
+      status: 'idle',
+      message: '',
+      error: null
+    });
+    
     setModalType('download');
     setModalOpen(true);
     setModalStatus('in_progress');
@@ -488,7 +498,7 @@ export default function Page() {
             </div>
           )}
 
-          {downloadStatus.status === 'error' && (
+          {downloadStatus.status === 'error' && downloadStatus.is_downloading && (
             <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20">
               <div className="flex items-center space-x-2">
                 <XCircle className="h-5 w-5 text-red-500" />
