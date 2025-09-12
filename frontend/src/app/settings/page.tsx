@@ -28,6 +28,17 @@ export default function Page() {
       memory_gb?: number;
     };
     ffmpeg_available?: boolean;
+    system_info?: {
+      platform?: string;
+      platform_release?: string;
+      architecture?: string;
+      processor?: string;
+    };
+    memory_info?: {
+      total_gb?: number;
+      available_gb?: number;
+      percent?: number;
+    };
   } | null>(null);
   const [clearing, setClearing] = useState(false);
   const [models, setModels] = useState<{
@@ -62,6 +73,7 @@ export default function Page() {
     speed?: string;
     eta?: string;
   }>>([]);
+  const [clearingData, setClearingData] = useState(false);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -296,12 +308,22 @@ export default function Page() {
   }, []);
 
   const clearOutputs = async () => {
-    setClearing(true);
+    setClearingData(true);
     try {
-      await fetch('http://localhost:8000/outputs/clear', { method: 'POST' });
-      await fetchSettings();
+      const response = await fetch('http://localhost:8000/outputs/clear', { method: 'POST' });
+      
+      if (response.ok) {
+        const result = await response.json();
+        await fetchSettings();
+        alert(`Successfully cleared ${result.deleted_files} files and freed ${result.freed_space_mb} MB of space.`);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to clear data: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Network error occurred while clearing data');
     } finally {
-      setClearing(false);
+      setClearingData(false);
     }
   };
 
@@ -575,16 +597,24 @@ export default function Page() {
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">GPU</span>
-                <span className="text-sm">{settings?.gpu_info?.type || '—'}</span>
+                <span className="text-sm font-medium">GPU Type</span>
+                <span className="text-sm capitalize">{settings?.gpu_info?.type || 'CPU'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Device</span>
-                <span className="text-sm">{settings?.gpu_info?.name || '—'}</span>
+                <span className="text-sm">{settings?.gpu_info?.name || 'CPU'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Memory</span>
-                <span className="text-sm">{settings?.gpu_info?.memory_gb ? `${settings.gpu_info.memory_gb} GB` : '—'}</span>
+                <span className="text-sm">{settings?.gpu_info?.memory_gb ? `${settings.gpu_info.memory_gb.toFixed(1)} GB` : '—'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">System RAM</span>
+                <span className="text-sm">{settings?.memory_info?.total_gb ? `${settings.memory_info.total_gb} GB` : '—'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Platform</span>
+                <span className="text-sm">{settings?.system_info?.platform || '—'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">FFmpeg</span>
@@ -625,12 +655,12 @@ export default function Page() {
             </h3>
             <div className="space-y-3">
               <button 
-                disabled={clearing} 
+                disabled={clearingData} 
                 onClick={clearOutputs} 
                 className="w-full inline-flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-red-600 hover:bg-red-500/10 border border-red-500/30 disabled:opacity-50 transition-all duration-200 hover:scale-105"
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Clear Data</span>
+                <span>{clearingData ? 'Clearing...' : 'Clear Data'}</span>
               </button>
               
             </div>

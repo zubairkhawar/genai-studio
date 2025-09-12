@@ -123,12 +123,46 @@ async def get_storage_usage():
 async def get_settings():
     """Return system and app settings"""
     try:
+        import psutil
+        import platform
+        import subprocess
+        
         usage = await get_storage_usage()
+        
+        # Enhanced GPU detection for cross-platform
+        gpu_info = gpu_detector.detect_gpu()
+        
+        # Get system information
+        system_info = {
+            "platform": platform.system(),
+            "platform_release": platform.release(),
+            "architecture": platform.machine(),
+            "processor": platform.processor(),
+        }
+        
+        # Get memory information
+        memory = psutil.virtual_memory()
+        memory_info = {
+            "total_gb": round(memory.total / (1024**3), 1),
+            "available_gb": round(memory.available / (1024**3), 1),
+            "percent": memory.percent,
+        }
+        
+        # Check FFmpeg availability
+        ffmpeg_available = False
+        try:
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=5)
+            ffmpeg_available = result.returncode == 0
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        
         return {
             "outputs_path": str(pathlib.Path('../outputs').resolve()),
             "storage_usage_bytes": usage["bytes"],
-            "gpu_info": gpu_detector.detect_gpu(),
-            "ffmpeg_available": True,
+            "gpu_info": gpu_info,
+            "ffmpeg_available": ffmpeg_available,
+            "system_info": system_info,
+            "memory_info": memory_info,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -138,20 +172,41 @@ async def clear_outputs():
     """Delete all files in outputs directory"""
     outputs_dir = pathlib.Path('../outputs')
     if not outputs_dir.exists():
-        return {"message": "Outputs directory does not exist"}
+        return {"message": "Outputs directory does not exist", "deleted_files": 0, "freed_space_mb": 0}
+    
     try:
-        for path in outputs_dir.iterdir():
-            if path.is_file():
+        deleted_files = 0
+        total_size = 0
+        
+        # Delete all files in outputs directory
+        for file_path in outputs_dir.rglob('*'):
+            if file_path.is_file():
                 try:
-                    path.unlink()
-                except Exception:
+                    file_size = file_path.stat().st_size
+                    total_size += file_size
+                    file_path.unlink()
+                    deleted_files += 1
+                    print(f"Deleted output file: {file_path}")
+                except Exception as e:
+                    print(f"Error deleting {file_path}: {e}")
                     continue
-            elif path.is_dir():
+        
+        # Also clear any subdirectories
+        for subdir in outputs_dir.iterdir():
+            if subdir.is_dir():
                 try:
-                    shutil.rmtree(path)
-                except Exception:
+                    shutil.rmtree(subdir)
+                    print(f"Deleted output directory: {subdir}")
+                except Exception as e:
+                    print(f"Error deleting directory {subdir}: {e}")
                     continue
-        return {"message": "Outputs cleared"}
+        
+        size_mb = total_size / (1024 * 1024)
+        return {
+            "message": f"Successfully deleted {deleted_files} output files",
+            "deleted_files": deleted_files,
+            "freed_space_mb": round(size_mb, 2)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -590,6 +645,53 @@ async def delete_models():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete models: {str(e)}")
+
+@app.post("/clear-outputs")
+async def clear_outputs():
+    """Clear all output files (videos and audios)"""
+    try:
+        import shutil
+        import os
+        
+        # Get outputs directory from settings
+        outputs_dir = pathlib.Path('../outputs')
+        if not outputs_dir.exists():
+            return {"message": "No outputs directory found", "deleted_files": 0, "freed_space_mb": 0}
+        
+        deleted_files = 0
+        total_size = 0
+        
+        # Delete all files in outputs directory
+        for file_path in outputs_dir.rglob('*'):
+            if file_path.is_file():
+                try:
+                    file_size = file_path.stat().st_size
+                    total_size += file_size
+                    file_path.unlink()
+                    deleted_files += 1
+                    print(f"Deleted output file: {file_path}")
+                except Exception as e:
+                    print(f"Error deleting {file_path}: {e}")
+                    continue
+        
+        # Also clear any subdirectories
+        for subdir in outputs_dir.iterdir():
+            if subdir.is_dir():
+                try:
+                    shutil.rmtree(subdir)
+                    print(f"Deleted output directory: {subdir}")
+                except Exception as e:
+                    print(f"Error deleting directory {subdir}: {e}")
+                    continue
+        
+        size_mb = total_size / (1024 * 1024)
+        return {
+            "message": f"Successfully deleted {deleted_files} output files",
+            "deleted_files": deleted_files,
+            "freed_space_mb": round(size_mb, 2)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear outputs: {str(e)}")
 
 async def generate_video(job_id: str, request: GenerationRequest):
     """Generate video in background"""
