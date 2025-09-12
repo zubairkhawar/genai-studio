@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Trash2, Cpu, RefreshCw, Download, Volume2, Play, Pause, CheckCircle, XCircle, AlertTriangle, Zap, Settings as SettingsIcon, CloudDownload } from 'lucide-react';
+import { Trash2, Cpu, RefreshCw, Volume2, Play, CheckCircle, XCircle, AlertTriangle, Zap, Settings as SettingsIcon, CloudDownload, HardDrive, Clock, FileText } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { ProgressModal } from '@/components/ProgressModal';
 
 interface Model {
   id: string;
@@ -16,16 +17,24 @@ interface Model {
 
 export default function Page() {
   const colors = useThemeColors();
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<{
+    outputs_path?: string;
+    storage_usage_bytes?: number;
+    gpu_info?: {
+      type?: string;
+      name?: string;
+      memory_gb?: number;
+    };
+    ffmpeg_available?: boolean;
+  } | null>(null);
   const [clearing, setClearing] = useState(false);
   const [models, setModels] = useState<{
     video_models: Model[];
     audio_models: Model[];
   }>({ video_models: [], audio_models: [] });
   const [loadingModels, setLoadingModels] = useState(false);
-  const [modelLoadingStates, setModelLoadingStates] = useState<Record<string, boolean>>({});
   
   // Download state
   const [downloadStatus, setDownloadStatus] = useState({
@@ -37,8 +46,14 @@ export default function Page() {
     error: null
   });
   
-  // Delete state
-  const [deleting, setDeleting] = useState(false);
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<'download' | 'delete'>('download');
+  const [modalProgress, setModalProgress] = useState(0);
+  const [modalStatus, setModalStatus] = useState<'idle' | 'in_progress' | 'completed' | 'error'>('idle');
+  const [modalCurrentStep, setModalCurrentStep] = useState('');
+  const [modalDetails, setModalDetails] = useState<string[]>([]);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -48,8 +63,8 @@ export default function Page() {
       if (!res.ok) throw new Error('Failed to fetch settings');
       const data = await res.json();
       setSettings(data);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to fetch settings');
     } finally {
       setLoading(false);
     }
@@ -79,6 +94,14 @@ export default function Page() {
   };
 
   const startDownload = async () => {
+    setModalType('download');
+    setModalOpen(true);
+    setModalStatus('in_progress');
+    setModalProgress(0);
+    setModalCurrentStep('Starting download...');
+    setModalDetails(['Preparing to download AI models', 'This may take several minutes']);
+    setModalError(null);
+    
     try {
       const response = await fetch('http://localhost:8000/download-models', {
         method: 'POST',
@@ -89,29 +112,56 @@ export default function Page() {
         const pollInterval = setInterval(async () => {
           await fetchDownloadStatus();
           
+          // Update modal with current progress
+          setModalProgress(downloadStatus.progress);
+          setModalCurrentStep(downloadStatus.message || 'Downloading...');
+          
+          if (downloadStatus.current_model) {
+            setModalDetails([
+              `Downloading: ${downloadStatus.current_model}`,
+              `Progress: ${downloadStatus.progress}%`,
+              'This may take several minutes depending on your internet speed'
+            ]);
+          }
+          
           // Stop polling if download is complete or error
-          if (downloadStatus.status === 'completed' || downloadStatus.status === 'error') {
+          if (downloadStatus.status === 'completed') {
             clearInterval(pollInterval);
+            setModalStatus('completed');
+            setModalProgress(100);
+            setModalCurrentStep('Download completed successfully!');
+            setModalDetails(['All models downloaded successfully', 'Models are now ready to use']);
             // Refresh models after download
             await fetchModels();
+          } else if (downloadStatus.status === 'error') {
+            clearInterval(pollInterval);
+            setModalStatus('error');
+            setModalError(downloadStatus.error || 'Download failed');
+            setModalDetails(['Download encountered an error', 'Please check your internet connection and try again']);
           }
         }, 1000);
       } else {
         const errorData = await response.json();
-        setError(errorData.detail || 'Failed to start download');
+        setModalStatus('error');
+        setModalError(errorData.detail || 'Failed to start download');
+        setModalDetails(['Failed to initiate download', 'Please try again']);
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setModalStatus('error');
+      setModalError(err instanceof Error ? err.message : 'Network error occurred');
+      setModalDetails(['Network error occurred', 'Please check your connection']);
     }
   };
 
   const deleteModels = async () => {
-    if (!confirm('Are you sure you want to delete all downloaded models? This action cannot be undone and will free up significant disk space.')) {
-      return;
-    }
+    setModalType('delete');
+    setModalOpen(true);
+    setModalStatus('in_progress');
+    setModalProgress(0);
+    setModalCurrentStep('Preparing to delete models...');
+    setModalDetails(['This will free up significant disk space', 'Deleting model files and cache directories']);
+    setModalError(null);
     
-    setDeleting(true);
-    setError(null);
     try {
       const response = await fetch('http://localhost:8000/delete-models', {
         method: 'POST',
@@ -119,46 +169,51 @@ export default function Page() {
       
       if (response.ok) {
         const result = await response.json();
+        
+        // Simulate progress steps
+        setModalProgress(25);
+        setModalCurrentStep('Deleting model directories...');
+        setModalDetails(['Removing Stable Video Diffusion models', 'Removing Stable Diffusion models', 'Removing Bark models']);
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        setModalProgress(50);
+        setModalCurrentStep('Clearing cache directories...');
+        setModalDetails(['Clearing HuggingFace cache', 'Clearing PyTorch cache', 'Freeing up disk space']);
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        setModalProgress(75);
+        setModalCurrentStep('Restarting model system...');
+        setModalDetails(['Updating model registry', 'Refreshing available models']);
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        setModalProgress(100);
+        setModalStatus('completed');
+        setModalCurrentStep('Deletion completed successfully!');
+        setModalDetails([
+          `Deleted ${result.deleted_directories || 0} model directories`,
+          `Freed ${result.freed_space_mb || 0} MB of disk space`,
+          'Models have been removed from the system'
+        ]);
+        
         // Refresh models after deletion
         await fetchModels();
-        // Show success message
         setError(null);
-        // You could add a success state here if needed
-        console.log('Models deleted successfully:', result);
       } else {
         const errorData = await response.json();
-        setError(errorData.detail || 'Failed to delete models');
+        setModalStatus('error');
+        setModalError(errorData.detail || 'Failed to delete models');
+        setModalDetails(['Deletion failed', 'Please try again or check system permissions']);
       }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setDeleting(false);
+    } catch (err: unknown) {
+      setModalStatus('error');
+      setModalError(err instanceof Error ? err.message : 'Network error occurred');
+      setModalDetails(['Network error occurred', 'Please check your connection and try again']);
     }
   };
 
-  const handleToggleModel = async (modelId: string, modelType: 'video' | 'audio') => {
-    setModelLoadingStates(prev => ({ ...prev, [modelId]: true }));
-    try {
-      const model = models[`${modelType}_models`].find(m => m.id === modelId);
-      if (!model) return;
-
-      const endpoint = model.loaded ? 'unload' : 'load';
-      const response = await fetch(`http://localhost:8000/models/${modelType}/${modelId}/${endpoint}`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        // Refresh models list
-        await fetchModels();
-      } else {
-        console.error(`Failed to ${endpoint} model:`, modelId);
-      }
-    } catch (err) {
-      console.error(`Error toggling model ${modelId}:`, err);
-    } finally {
-      setModelLoadingStates(prev => ({ ...prev, [modelId]: false }));
-    }
-  };
 
   useEffect(() => {
     fetchSettings();
@@ -176,9 +231,6 @@ export default function Page() {
     }
   };
 
-  // Get the primary models (SVD for video, Bark for audio)
-  const primaryVideoModel = models.video_models.find(m => m.id === 'stable-video-diffusion') || models.video_models[0];
-  const primaryAudioModel = models.audio_models.find(m => m.id === 'bark') || models.audio_models[0];
 
   return (
     <div className="space-y-8">
@@ -225,7 +277,101 @@ export default function Page() {
         </div>
         
         <div className="space-y-6">
-          {/* Download Progress */}
+          {/* Model Details - Show when models are downloaded */}
+          {(models.video_models.length > 0 || models.audio_models.length > 0) && (
+            <div className="p-4 rounded-xl bg-accent-green/5 border border-accent-green/20">
+              <div className="flex items-center space-x-2 mb-4">
+                <CheckCircle className="h-5 w-5 text-accent-green" />
+                <span className="font-medium text-accent-green">Models Downloaded</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Video Models */}
+                {models.video_models.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100 flex items-center space-x-2">
+                      <Play className="h-4 w-4 text-accent-blue" />
+                      <span>Video Models</span>
+                    </h4>
+                    {models.video_models.map((model) => (
+                      <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-sm">{model.name}</span>
+                          <div className={`px-2 py-1 rounded-full text-xs ${
+                            model.loaded 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
+                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                          }`}>
+                            {model.loaded ? 'Loaded' : 'Available'}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500">
+                          <div className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3" />
+                            <span>Max: {model.max_duration}s</span>
+                          </div>
+                          {model.resolution && (
+                            <div className="flex items-center space-x-1">
+                              <FileText className="h-3 w-3" />
+                              <span>{model.resolution}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Audio Models */}
+                {models.audio_models.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100 flex items-center space-x-2">
+                      <Volume2 className="h-4 w-4 text-accent-violet" />
+                      <span>Audio Models</span>
+                    </h4>
+                    {models.audio_models.map((model) => (
+                      <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-sm">{model.name}</span>
+                          <div className={`px-2 py-1 rounded-full text-xs ${
+                            model.loaded 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
+                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                          }`}>
+                            {model.loaded ? 'Loaded' : 'Available'}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500">
+                          <div className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3" />
+                            <span>Max: {model.max_duration}s</span>
+                          </div>
+                          {model.sample_rate && (
+                            <div className="flex items-center space-x-1">
+                              <FileText className="h-3 w-3" />
+                              <span>{model.sample_rate}Hz</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <div className="mt-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center space-x-2">
+                  <HardDrive className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Storage Information</span>
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                  Models are stored locally and ready for generation. You can delete them to free up disk space.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Download Progress - Show when downloading */}
           {downloadStatus.is_downloading && (
             <div className="p-4 rounded-xl bg-accent-blue/5 border border-accent-blue/20">
               <div className="flex items-center justify-between mb-3">
@@ -249,11 +395,24 @@ export default function Page() {
                   <p className="text-xs mt-1">Current: {downloadStatus.current_model}</p>
                 )}
               </div>
+              
+              <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center space-x-2 mb-2">
+                  <CloudDownload className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Download Details</span>
+                </div>
+                <div className="space-y-1 text-xs text-blue-600 dark:text-blue-300">
+                  <p>• Stable Video Diffusion (~4GB) - For video generation</p>
+                  <p>• Stable Diffusion (~4GB) - For image processing</p>
+                  <p>• Bark (~5GB) - For audio generation</p>
+                  <p>• Total size: ~13GB</p>
+                </div>
+              </div>
             </div>
           )}
 
           {/* Download Status Messages */}
-          {downloadStatus.status === 'completed' && (
+          {downloadStatus.status === 'completed' && !downloadStatus.is_downloading && (
             <div className="p-4 rounded-xl bg-accent-green/5 border border-accent-green/20">
               <div className="flex items-center space-x-2">
                 <CheckCircle className="h-5 w-5 text-accent-green" />
@@ -296,51 +455,27 @@ export default function Page() {
             
             {/* Show delete button if models are downloaded */}
             {models.video_models.length > 0 || models.audio_models.length > 0 ? (
-              <button
+            <button
                 onClick={deleteModels}
-                disabled={deleting || downloadStatus.is_downloading}
-                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 ${
-                  deleting || downloadStatus.is_downloading
-                    ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 cursor-not-allowed'
-                    : 'bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30'
-                }`}
+                className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30"
               >
-                {deleting ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    <span>Deleting...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <Trash2 className="h-4 w-4" />
-                    <span>Delete Models</span>
-                  </div>
-                )}
+                <div className="flex items-center space-x-2">
+                  <Trash2 className="h-4 w-4" />
+                  <span>Delete Models</span>
+                </div>
               </button>
-            ) : (
+              ) : (
               /* Show download button if no models are downloaded */
               <button
                 onClick={startDownload}
-                disabled={downloadStatus.is_downloading}
-                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 ${
-                  downloadStatus.is_downloading
-                    ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 cursor-not-allowed'
-                    : 'bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30'
-                }`}
+                className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30"
               >
-                {downloadStatus.is_downloading ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    <span>Downloading...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <CloudDownload className="h-4 w-4" />
-                    <span>Download Models</span>
-                  </div>
-                )}
+                <div className="flex items-center space-x-2">
+                  <CloudDownload className="h-4 w-4" />
+                  <span>Download Models</span>
+                </div>
               </button>
-            )}
+              )}
           </div>
         </div>
       </div>
@@ -421,20 +556,30 @@ export default function Page() {
                 className="w-full inline-flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-red-600 hover:bg-red-500/10 border border-red-500/30 disabled:opacity-50 transition-all duration-200 hover:scale-105"
               >
                 <Trash2 className="h-4 w-4" />
-                <span>Clear All Outputs</span>
+                <span>Clear Data</span>
               </button>
-              <button 
-                onClick={() => { fetchSettings(); fetchModels(); }} 
-                disabled={loadingModels}
-                className="w-full inline-flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-accent-blue hover:bg-accent-blue/10 border border-accent-blue/30 disabled:opacity-50 transition-all duration-200 hover:scale-105"
-              >
-                <RefreshCw className={`h-4 w-4 ${loadingModels ? 'animate-spin' : ''}`} />
-                <span>Refresh All</span>
-              </button>
+              
             </div>
           </div>
         </div>
       </div>
+
+      {/* Progress Modal */}
+      <ProgressModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalType === 'download' ? 'Downloading AI Models' : 'Deleting AI Models'}
+        description={modalType === 'download' 
+          ? 'Downloading the latest AI models for optimal performance' 
+          : 'Removing downloaded models to free up disk space'
+        }
+        progress={modalProgress}
+        status={modalStatus}
+        currentStep={modalCurrentStep}
+        details={modalDetails}
+        error={modalError || undefined}
+        type={modalType}
+      />
     </div>
   );
 }
