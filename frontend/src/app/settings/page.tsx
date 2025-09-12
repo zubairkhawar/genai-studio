@@ -54,6 +54,14 @@ export default function Page() {
   const [modalCurrentStep, setModalCurrentStep] = useState('');
   const [modalDetails, setModalDetails] = useState<string[]>([]);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [modalModelProgress, setModalModelProgress] = useState<Array<{
+    name: string;
+    size: string;
+    progress: number;
+    status: 'pending' | 'downloading' | 'completed' | 'error';
+    speed?: string;
+    eta?: string;
+  }>>([]);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -102,6 +110,28 @@ export default function Page() {
     setModalDetails(['Preparing to download AI models', 'This may take several minutes']);
     setModalError(null);
     
+    // Initialize model progress tracking
+    setModalModelProgress([
+      {
+        name: 'Stable Video Diffusion',
+        size: '~4GB',
+        progress: 0,
+        status: 'pending'
+      },
+      {
+        name: 'Stable Diffusion',
+        size: '~4GB', 
+        progress: 0,
+        status: 'pending'
+      },
+      {
+        name: 'Bark',
+        size: '~5GB',
+        progress: 0,
+        status: 'pending'
+      }
+    ]);
+    
     try {
       const response = await fetch('http://localhost:8000/download-models', {
         method: 'POST',
@@ -116,7 +146,22 @@ export default function Page() {
           setModalProgress(downloadStatus.progress);
           setModalCurrentStep(downloadStatus.message || 'Downloading...');
           
+          // Update individual model progress
           if (downloadStatus.current_model) {
+            setModalModelProgress(prev => prev.map(model => {
+              if (model.name.toLowerCase().includes(downloadStatus.current_model.toLowerCase()) || 
+                  downloadStatus.current_model.toLowerCase().includes(model.name.toLowerCase().split(' ')[0])) {
+                return {
+                  ...model,
+                  status: 'downloading' as const,
+                  progress: Math.min(downloadStatus.progress, 100),
+                  speed: downloadStatus.progress > 0 ? 'Downloading...' : undefined,
+                  eta: downloadStatus.progress > 0 ? 'Calculating...' : undefined
+                };
+              }
+              return model;
+            }));
+            
             setModalDetails([
               `Downloading: ${downloadStatus.current_model}`,
               `Progress: ${downloadStatus.progress}%`,
@@ -131,6 +176,14 @@ export default function Page() {
             setModalProgress(100);
             setModalCurrentStep('Download completed successfully!');
             setModalDetails(['All models downloaded successfully', 'Models are now ready to use']);
+            
+            // Mark all models as completed
+            setModalModelProgress(prev => prev.map(model => ({
+              ...model,
+              status: 'completed' as const,
+              progress: 100
+            })));
+            
             // Refresh models after download
             await fetchModels();
           } else if (downloadStatus.status === 'error') {
@@ -138,6 +191,17 @@ export default function Page() {
             setModalStatus('error');
             setModalError(downloadStatus.error || 'Download failed');
             setModalDetails(['Download encountered an error', 'Please check your internet connection and try again']);
+            
+            // Mark current model as error
+            setModalModelProgress(prev => prev.map(model => {
+              if (model.status === 'downloading') {
+                return {
+                  ...model,
+                  status: 'error' as const
+                };
+              }
+              return model;
+            }));
           }
         }, 1000);
       } else {
@@ -537,7 +601,7 @@ export default function Page() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Usage</span>
                 <span className="text-sm">
-                  {settings ? (settings.storage_usage_bytes / (1024*1024)).toFixed(2) : '—'} MB
+                  {settings?.storage_usage_bytes ? (settings.storage_usage_bytes / (1024*1024)).toFixed(2) : '—'} MB
                 </span>
               </div>
             </div>
@@ -579,6 +643,7 @@ export default function Page() {
         details={modalDetails}
         error={modalError || undefined}
         type={modalType}
+        modelProgress={modalModelProgress}
       />
     </div>
   );

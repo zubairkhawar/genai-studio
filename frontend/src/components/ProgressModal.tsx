@@ -4,6 +4,15 @@ import { useEffect, useState } from 'react';
 import { X, CheckCircle, AlertCircle, Trash2, CloudDownload } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
+interface ModelProgress {
+  name: string;
+  size: string;
+  progress: number;
+  status: 'pending' | 'downloading' | 'completed' | 'error';
+  speed?: string;
+  eta?: string;
+}
+
 interface ProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,6 +24,7 @@ interface ProgressModalProps {
   details?: string[];
   error?: string;
   type: 'download' | 'delete';
+  modelProgress?: ModelProgress[];
 }
 
 export function ProgressModal({
@@ -27,7 +37,8 @@ export function ProgressModal({
   currentStep,
   details = [],
   error,
-  type
+  type,
+  modelProgress = []
 }: ProgressModalProps) {
   const colors = useThemeColors();
   const [showSuccess, setShowSuccess] = useState(false);
@@ -155,6 +166,63 @@ export function ProgressModal({
           {error && (
             <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Model Progress Details */}
+          {modelProgress.length > 0 && type === 'download' && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Model Download Progress:</h4>
+              <div className="space-y-3">
+                {modelProgress.map((model, index) => (
+                  <div key={index} className="p-3 rounded-lg bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-3 h-3 rounded-full ${
+                          model.status === 'completed' ? 'bg-green-500' :
+                          model.status === 'downloading' ? 'bg-accent-blue animate-pulse' :
+                          model.status === 'error' ? 'bg-red-500' :
+                          'bg-gray-400'
+                        }`}></div>
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{model.name}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {model.size}
+                      </div>
+                    </div>
+                    
+                    {model.status === 'downloading' && (
+                      <div className="space-y-2">
+                        <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-1.5">
+                          <div 
+                            className="bg-accent-blue h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${model.progress}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span>{model.progress}%</span>
+                          {model.speed && <span>{model.speed}</span>}
+                          {model.eta && <span>ETA: {model.eta}</span>}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {model.status === 'completed' && (
+                      <div className="flex items-center space-x-2 text-xs text-green-600 dark:text-green-400">
+                        <CheckCircle className="h-3 w-3" />
+                        <span>Download completed</span>
+                      </div>
+                    )}
+                    
+                    {model.status === 'error' && (
+                      <div className="flex items-center space-x-2 text-xs text-red-600 dark:text-red-400">
+                        <AlertCircle className="h-3 w-3" />
+                        <span>Download failed</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
