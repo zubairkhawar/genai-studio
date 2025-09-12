@@ -529,17 +529,21 @@ async def delete_models():
         
         # List of model directories to delete
         model_dirs = [
-            'stable-video-diffusion',
-            'stable-diffusion', 
-            'bark',
-            'huggingface'  # Common cache directory
+            ('video', 'stable-video-diffusion'),
+            ('image', 'stable-diffusion'), 
+            ('audio', 'bark'),
+            ('', 'huggingface')  # Common cache directory
         ]
         
         deleted_count = 0
         total_size = 0
         
-        for model_dir in model_dirs:
-            model_path = models_dir / model_dir
+        for subdir, model_dir in model_dirs:
+            if subdir:
+                model_path = models_dir / subdir / model_dir
+            else:
+                model_path = models_dir / model_dir
+                
             if model_path.exists() and model_path.is_dir():
                 try:
                     # Calculate size before deletion
@@ -572,8 +576,10 @@ async def delete_models():
                 except Exception as e:
                     print(f"Error deleting cache {cache_dir}: {e}")
         
-        # Restart models after deletion
-        restart_models()
+        # Clear model registry after deletion
+        global video_generator, audio_generator
+        video_generator = None
+        audio_generator = None
         
         size_mb = total_size / (1024 * 1024)
         return {
