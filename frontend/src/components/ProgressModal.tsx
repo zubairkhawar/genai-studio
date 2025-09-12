@@ -11,6 +11,10 @@ interface ModelProgress {
   status: 'pending' | 'downloading' | 'completed' | 'error';
   speed?: string;
   eta?: string;
+  downloaded_mb?: number;
+  size_gb?: number;
+  speed_mbps?: number;
+  eta_seconds?: number;
 }
 
 interface ProgressModalProps {
@@ -188,8 +192,11 @@ export function ProgressModal({
                         }`}></div>
                         <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{model.name}</span>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {model.size}
+                      <div className="text-xs text-gray-500 text-right">
+                        {model.downloaded_mb && model.size_gb ? 
+                          `${(model.downloaded_mb / 1024).toFixed(1)}GB / ${model.size_gb}GB` : 
+                          model.size
+                        }
                       </div>
                     </div>
                     
@@ -202,9 +209,13 @@ export function ProgressModal({
                           ></div>
                         </div>
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span>{model.progress}%</span>
-                          {model.speed && <span>{model.speed}</span>}
-                          {model.eta && <span>ETA: {model.eta}</span>}
+                          <span>{model.progress.toFixed(1)}%</span>
+                          {model.speed_mbps && (
+                            <span>{model.speed_mbps.toFixed(1)} MB/s</span>
+                          )}
+                          {model.eta_seconds && model.eta_seconds > 0 && (
+                            <span>ETA: {Math.floor(model.eta_seconds / 60)}:{(model.eta_seconds % 60).toFixed(0).padStart(2, '0')}</span>
+                          )}
                         </div>
                       </div>
                     )}

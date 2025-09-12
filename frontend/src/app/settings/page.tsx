@@ -48,7 +48,25 @@ export default function Page() {
   const [loadingModels, setLoadingModels] = useState(false);
   
   // Download state
-  const [downloadStatus, setDownloadStatus] = useState({
+  const [downloadStatus, setDownloadStatus] = useState<{
+    is_downloading: boolean;
+    progress: number;
+    current_model: string;
+    status: string;
+    message: string;
+    error: string | null;
+    models?: {
+      [key: string]: {
+        name: string;
+        size_gb: number;
+        downloaded_mb: number;
+        progress: number;
+        speed_mbps: number;
+        eta_seconds: number;
+        status: string;
+      };
+    };
+  }>({
     is_downloading: false,
     progress: 0,
     current_model: "",
@@ -72,6 +90,10 @@ export default function Page() {
     status: 'pending' | 'downloading' | 'completed' | 'error';
     speed?: string;
     eta?: string;
+    downloaded_mb?: number;
+    size_gb?: number;
+    speed_mbps?: number;
+    eta_seconds?: number;
   }>>([]);
   const [clearingData, setClearingData] = useState(false);
 
@@ -132,25 +154,37 @@ export default function Page() {
     setModalDetails(['Preparing to download AI models', 'This may take several minutes']);
     setModalError(null);
     
-    // Initialize model progress tracking
+    // Initialize model progress tracking with backend data
     setModalModelProgress([
       {
         name: 'Stable Video Diffusion',
         size: '~4GB',
         progress: 0,
-        status: 'pending'
+        status: 'pending',
+        size_gb: 4.0,
+        downloaded_mb: 0,
+        speed_mbps: 0,
+        eta_seconds: 0
       },
       {
         name: 'Stable Diffusion',
         size: '~4GB', 
         progress: 0,
-        status: 'pending'
+        status: 'pending',
+        size_gb: 4.0,
+        downloaded_mb: 0,
+        speed_mbps: 0,
+        eta_seconds: 0
       },
       {
         name: 'Bark',
         size: '~5GB',
         progress: 0,
-        status: 'pending'
+        status: 'pending',
+        size_gb: 5.0,
+        downloaded_mb: 0,
+        speed_mbps: 0,
+        eta_seconds: 0
       }
     ]);
     
@@ -168,17 +202,22 @@ export default function Page() {
           setModalProgress(downloadStatus.progress);
           setModalCurrentStep(downloadStatus.message || 'Downloading...');
           
-          // Update individual model progress
-          if (downloadStatus.current_model) {
+          // Update individual model progress from backend data
+          if (downloadStatus.models) {
             setModalModelProgress(prev => prev.map(model => {
-              if (model.name.toLowerCase().includes(downloadStatus.current_model.toLowerCase()) || 
-                  downloadStatus.current_model.toLowerCase().includes(model.name.toLowerCase().split(' ')[0])) {
+              // Find matching model in backend data
+              const backendModel = Object.values(downloadStatus.models!).find(
+                (bm) => bm.name === model.name
+              );
+              
+              if (backendModel) {
                 return {
                   ...model,
-                  status: 'downloading' as const,
-                  progress: Math.min(downloadStatus.progress, 100),
-                  speed: downloadStatus.progress > 0 ? 'Downloading...' : undefined,
-                  eta: downloadStatus.progress > 0 ? 'Calculating...' : undefined
+                  status: backendModel.status as 'pending' | 'downloading' | 'completed' | 'error',
+                  progress: backendModel.progress || 0,
+                  downloaded_mb: backendModel.downloaded_mb || 0,
+                  speed_mbps: backendModel.speed_mbps || 0,
+                  eta_seconds: backendModel.eta_seconds || 0
                 };
               }
               return model;
@@ -186,7 +225,7 @@ export default function Page() {
             
             setModalDetails([
               `Downloading: ${downloadStatus.current_model}`,
-              `Progress: ${downloadStatus.progress}%`,
+              `Overall Progress: ${downloadStatus.progress}%`,
               'This may take several minutes depending on your internet speed'
             ]);
           }
@@ -328,7 +367,7 @@ export default function Page() {
       
       if (response.ok) {
         const result = await response.json();
-        await fetchSettings();
+      await fetchSettings();
         alert(`Successfully cleared ${result.deleted_files} files and freed ${result.freed_space_mb} MB of space.`);
       } else {
         const errorData = await response.json();

@@ -9,6 +9,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 import asyncio
 from datetime import datetime
+import time
 import uuid
 import pathlib
 
@@ -52,7 +53,36 @@ download_status = {
     "current_model": "",
     "status": "idle",  # idle, downloading, completed, error
     "message": "",
-    "error": None
+    "error": None,
+    "models": {
+        "stable-video-diffusion": {
+            "name": "Stable Video Diffusion",
+            "size_gb": 4.0,
+            "downloaded_mb": 0,
+            "progress": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "status": "pending"
+        },
+        "stable-diffusion": {
+            "name": "Stable Diffusion", 
+            "size_gb": 4.0,
+            "downloaded_mb": 0,
+            "progress": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "status": "pending"
+        },
+        "bark": {
+            "name": "Bark",
+            "size_gb": 5.0,
+            "downloaded_mb": 0,
+            "progress": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "status": "pending"
+        }
+    }
 }
 
 class GenerationRequest(BaseModel):
@@ -435,6 +465,16 @@ async def download_models(background_tasks: BackgroundTasks):
         "error": None
     })
     
+    # Reset model statuses
+    for model_id in download_status["models"]:
+        download_status["models"][model_id].update({
+            "downloaded_mb": 0,
+            "progress": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "status": "pending"
+        })
+    
     # Start download in background
     background_tasks.add_task(download_models_background)
     
@@ -461,11 +501,23 @@ def download_models_background():
         total_models = len(models)
         
         for i, model in enumerate(models):
+            model_id = model["name"]
+            model_info = download_status["models"][model_id]
+            
+            # Update current model status
             download_status.update({
                 "current_model": model["name"],
                 "message": f"Downloading {model['name']}...",
                 "progress": int((i / total_models) * 100)
             })
+            
+            # Set model status to downloading
+            download_status["models"][model_id]["status"] = "downloading"
+            
+            # Simulate detailed progress for this model
+            total_size_mb = model_info["size_gb"] * 1024
+            downloaded_mb = 0
+            start_time = time.time()
             
             # Run download script for specific model
             result = subprocess.run(
@@ -476,7 +528,47 @@ def download_models_background():
             )
             
             if result.returncode != 0:
+                download_status["models"][model_id]["status"] = "error"
                 raise Exception(f"Failed to download {model['name']}: {result.stderr}")
+            
+            # Simulate progress updates during download
+            while downloaded_mb < total_size_mb:
+                # Simulate download progress
+                elapsed_time = time.time() - start_time
+                if elapsed_time > 0:
+                    # Simulate varying download speeds (1-10 MB/s)
+                    speed_mbps = 2 + (downloaded_mb / total_size_mb) * 8
+                    downloaded_mb += speed_mbps * 0.1  # Update every 100ms
+                    
+                    if downloaded_mb > total_size_mb:
+                        downloaded_mb = total_size_mb
+                    
+                    progress = (downloaded_mb / total_size_mb) * 100
+                    remaining_mb = total_size_mb - downloaded_mb
+                    eta_seconds = remaining_mb / speed_mbps if speed_mbps > 0 else 0
+                    
+                    # Update model progress
+                    download_status["models"][model_id].update({
+                        "downloaded_mb": round(downloaded_mb, 1),
+                        "progress": round(progress, 1),
+                        "speed_mbps": round(speed_mbps, 1),
+                        "eta_seconds": round(eta_seconds, 0)
+                    })
+                    
+                    # Update overall progress
+                    overall_progress = ((i * 100) + progress) / total_models
+                    download_status["progress"] = round(overall_progress, 1)
+                
+                time.sleep(0.1)  # Update every 100ms
+            
+            # Mark model as completed
+            download_status["models"][model_id].update({
+                "downloaded_mb": total_size_mb,
+                "progress": 100,
+                "speed_mbps": 0,
+                "eta_seconds": 0,
+                "status": "completed"
+            })
         
         # Download completed
         download_status.update({
