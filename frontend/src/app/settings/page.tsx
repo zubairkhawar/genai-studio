@@ -115,16 +115,15 @@ export default function Page() {
   };
 
   const startDownload = async () => {
-    // Clear any previous download status
+    // Clear any previous download status and show initial state
     setDownloadStatus({
-      is_downloading: false,
+      is_downloading: true,
       progress: 0,
       current_model: '',
-      status: 'idle',
-      message: '',
+      status: 'downloading',
+      message: 'Starting download...',
       error: null
     });
-    
     
     try {
       const response = await fetch('http://localhost:8000/download-models', {
@@ -134,33 +133,38 @@ export default function Page() {
       if (response.ok) {
         // Start polling for download status
         const pollInterval = setInterval(async () => {
-          await fetchDownloadStatus();
-          
-          // Update download status
-          setDownloadStatus(downloadStatus);
+          try {
+            const response = await fetch('http://localhost:8000/download-status');
+            const downloadStatus = await response.json();
+            
+            // Update download status
+            setDownloadStatus(downloadStatus);
           
           // Stop polling if download is complete or error
-          if (downloadStatus.status === 'completed') {
+            if (downloadStatus.status === 'completed') {
             clearInterval(pollInterval);
-            
-            // Load models after download completion
-            try {
-              const loadResponse = await fetch('http://localhost:8000/load-models', {
-                method: 'POST',
-              });
-              if (loadResponse.ok) {
-                console.log('Models loaded successfully');
-              } else {
-                console.error('Failed to load models');
+              
+              // Load models after download completion
+              try {
+                const loadResponse = await fetch('http://localhost:8000/load-models', {
+                  method: 'POST',
+                });
+                if (loadResponse.ok) {
+                  console.log('Models loaded successfully');
+                } else {
+                  console.error('Failed to load models');
+                }
+              } catch (err) {
+                console.error('Error loading models:', err);
               }
-            } catch (err) {
-              console.error('Error loading models:', err);
-            }
-            
+              
             // Refresh models after download
             await fetchModels();
-          } else if (downloadStatus.status === 'error') {
-            clearInterval(pollInterval);
+            } else if (downloadStatus.status === 'error') {
+              clearInterval(pollInterval);
+            }
+          } catch (pollError) {
+            console.error('Error polling download status:', pollError);
           }
         }, 1000);
       } else {
@@ -280,8 +284,8 @@ export default function Page() {
         </div>
         
         <div className="space-y-6">
-          {/* Model Details - Show when models are downloaded */}
-          {(models.video_models.length > 0 || models.audio_models.length > 0) && (
+          {/* Model Details - Show when models are downloaded and not downloading */}
+          {!downloadStatus.is_downloading && (models.video_models.length > 0 || models.audio_models.length > 0) && (
             <div className="p-4 rounded-xl bg-accent-green/5 border border-accent-green/20">
               <div className="flex items-center space-x-2 mb-4">
                 <CheckCircle className="h-5 w-5 text-accent-green" />
@@ -399,6 +403,45 @@ export default function Page() {
                 )}
               </div>
               
+              {/* Individual Model Progress */}
+              {downloadStatus.models && (
+                <div className="mt-4 space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Model Progress:</h4>
+                  {Object.values(downloadStatus.models).map((model: any, index: number) => (
+                    <div key={index} className="p-2 rounded-lg bg-gray-50 dark:bg-slate-800/50">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{model.name}</span>
+                        <div className="flex items-center space-x-2 text-xs text-gray-500">
+                          {model.speed_mbps > 0 && (
+                            <span>{model.speed_mbps.toFixed(1)} MB/s</span>
+                          )}
+                          {model.eta_seconds > 0 && (
+                            <span>ETA: {Math.floor(model.eta_seconds / 60)}:{(model.eta_seconds % 60).toFixed(0).padStart(2, '0')}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">
+                          {model.downloaded_mb > 0 ? `${(model.downloaded_mb / 1024).toFixed(1)}GB / ${model.size_gb}GB` : `0.0GB / ${model.size_gb}GB`}
+                        </span>
+                        <span className="text-xs text-gray-500">{model.progress.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1">
+                        <div 
+                          className={`h-1 rounded-full transition-all duration-300 ${
+                            model.status === 'completed' ? 'bg-green-500' :
+                            model.status === 'downloading' ? 'bg-accent-blue' :
+                            model.status === 'error' ? 'bg-red-500' :
+                            'bg-gray-400'
+                          }`}
+                          style={{ width: `${model.progress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
               <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                 <div className="flex items-center space-x-2 mb-2">
                   <CloudDownload className="h-4 w-4 text-blue-600" />
@@ -456,8 +499,8 @@ export default function Page() {
               </p>
             </div>
             
-            {/* Show delete button if models are downloaded */}
-            {models.video_models.length > 0 || models.audio_models.length > 0 ? (
+            {/* Show delete button if models are downloaded and not downloading */}
+            {!downloadStatus.is_downloading && (models.video_models.length > 0 || models.audio_models.length > 0) ? (
             <button
                 onClick={deleteModels}
                 className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30"
