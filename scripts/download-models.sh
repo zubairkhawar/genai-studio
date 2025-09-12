@@ -89,7 +89,7 @@ show_usage() {
 # Function to check disk space
 check_disk_space() {
     local required_gb=15  # Approximate space needed for all models
-    local available_gb=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+    local available_gb=$(df -g . | awk 'NR==2 {print $4}')
     
     if [ "$available_gb" -lt "$required_gb" ]; then
         print_warning "Low disk space detected. Available: ${available_gb}GB, Required: ~${required_gb}GB"

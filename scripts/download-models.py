@@ -36,7 +36,7 @@ class ModelDownloader:
         self.video_models = {
             "stable-video-diffusion": {
                 "repo": "stabilityai/stable-video-diffusion-img2vid",
-                "path": "models/video/stable-video-diffusion",
+                "path": "video/stable-video-diffusion",
                 "description": "Stable Video Diffusion (SVD) - Official image-to-video generation",
                 "size": "~5GB",
                 "type": "img2vid",
@@ -55,7 +55,7 @@ class ModelDownloader:
         self.image_models = {
             "stable-diffusion": {
                 "repo": "runwayml/stable-diffusion-v1-5",
-                "path": "models/image/stable-diffusion",
+                "path": "image/stable-diffusion",
                 "description": "Stable Diffusion v1.5 - Text-to-image generation for SVD input",
                 "size": "~4GB",
                 "type": "text2img",
@@ -72,7 +72,7 @@ class ModelDownloader:
         self.audio_models = {
             "bark": {
                 "repo": "suno/bark",
-                "path": "models/audio/bark",
+                "path": "audio/bark",
                 "description": "Bark - High-quality text-to-speech and audio generation",
                 "size": "~4GB",
                 "type": "tts",

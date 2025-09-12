@@ -18,6 +18,9 @@ from utils.gpu_detector import GPUDetector
 from utils.ffmpeg_handler import FFmpegHandler
 import shutil
 from utils.job_queue import JobQueue
+import subprocess
+import threading
+import time
 
 app = FastAPI(title="Text-to-Media Generator", version="1.0.0")
 
@@ -31,6 +34,7 @@ app.add_middleware(
 )
 
 # Static file mounting will be done at the end after all routes are defined
+# Note: We'll use FileResponse for binary files instead of StaticFiles to avoid encoding issues
 
 # Initialize components
 gpu_detector = GPUDetector()
@@ -40,6 +44,16 @@ job_queue = JobQueue()
 # Global model instances
 video_generator = None
 audio_generator = None
+
+# Download status tracking
+download_status = {
+    "is_downloading": False,
+    "progress": 0,
+    "current_model": "",
+    "status": "idle",  # idle, downloading, completed, error
+    "message": "",
+    "error": None
+}
 
 class GenerationRequest(BaseModel):
     prompt: str
@@ -138,6 +152,55 @@ async def clear_outputs():
                 except Exception:
                     continue
         return {"message": "Outputs cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# File serving endpoints (must come before generic DELETE route)
+@app.get("/outputs/videos/{filename}")
+async def serve_video_file(filename: str):
+    """Serve video files with proper binary handling"""
+    try:
+        file_path = pathlib.Path(f'../outputs/videos/{filename}')
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Video file not found")
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type="video/mp4",
+            filename=filename
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/outputs/audio/{filename}")
+async def serve_audio_file(filename: str):
+    """Serve audio files with proper binary handling"""
+    try:
+        file_path = pathlib.Path(f'../outputs/audio/{filename}')
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type="audio/wav",
+            filename=filename
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/outputs/voice-previews/{filename}")
+async def serve_voice_preview(filename: str):
+    """Serve voice preview files with proper binary handling"""
+    try:
+        file_path = pathlib.Path(f'../outputs/voice-previews/{filename}')
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(status_code=404, detail="Voice preview file not found")
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type="audio/wav",
+            filename=filename
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -295,6 +358,115 @@ async def get_voice_previews():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/download-status")
+async def get_download_status():
+    """Get current download status"""
+    return download_status
+
+@app.post("/download-models")
+async def download_models(background_tasks: BackgroundTasks):
+    """Start downloading all models"""
+    global download_status
+    
+    if download_status["is_downloading"]:
+        raise HTTPException(status_code=400, detail="Download already in progress")
+    
+    # Reset status
+    download_status.update({
+        "is_downloading": True,
+        "progress": 0,
+        "current_model": "",
+        "status": "downloading",
+        "message": "Starting model download...",
+        "error": None
+    })
+    
+    # Start download in background
+    background_tasks.add_task(download_models_background)
+    
+    return {"message": "Model download started", "status": "downloading"}
+
+def download_models_background():
+    """Background task to download models"""
+    global download_status
+    
+    try:
+        # Get the script path
+        script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.sh"
+        
+        if not script_path.exists():
+            raise Exception("Download script not found")
+        
+        # Models to download
+        models = [
+            {"name": "stable-video-diffusion", "type": "video"},
+            {"name": "stable-diffusion", "type": "image"}, 
+            {"name": "bark", "type": "audio"}
+        ]
+        
+        total_models = len(models)
+        
+        for i, model in enumerate(models):
+            download_status.update({
+                "current_model": model["name"],
+                "message": f"Downloading {model['name']}...",
+                "progress": int((i / total_models) * 100)
+            })
+            
+            # Run download script for specific model
+            result = subprocess.run(
+                [str(script_path), "--model", model["name"]],
+                capture_output=True,
+                text=True,
+                cwd=pathlib.Path(__file__).parent.parent
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"Failed to download {model['name']}: {result.stderr}")
+        
+        # Download completed
+        download_status.update({
+            "is_downloading": False,
+            "progress": 100,
+            "current_model": "",
+            "status": "completed",
+            "message": "All models downloaded successfully!",
+            "error": None
+        })
+        
+        # Restart models after download
+        time.sleep(2)  # Give time for files to be written
+        restart_models()
+        
+    except Exception as e:
+        download_status.update({
+            "is_downloading": False,
+            "status": "error",
+            "message": f"Download failed: {str(e)}",
+            "error": str(e)
+        })
+
+def restart_models():
+    """Restart model loading after download"""
+    global video_generator, audio_generator
+    
+    try:
+        # Reinitialize generators
+        gpu_info = gpu_detector.detect_gpu()
+        video_generator = VideoGenerator(gpu_info)
+        audio_generator = AudioGenerator(gpu_info)
+        
+        # Load models
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(video_generator.load_default_models())
+        loop.run_until_complete(audio_generator.load_default_models())
+        loop.close()
+        
+    except Exception as e:
+        print(f"Error restarting models: {e}")
+
 @app.delete("/job/{job_id}")
 async def cancel_job(job_id: str):
     """Cancel a job"""
@@ -342,6 +514,76 @@ async def unload_model(model_type: str, model_name: str):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/delete-models")
+async def delete_models():
+    """Delete all downloaded models"""
+    try:
+        import shutil
+        
+        # Define model directories
+        models_dir = pathlib.Path('../models')
+        
+        if not models_dir.exists():
+            return {"message": "No models directory found"}
+        
+        # List of model directories to delete
+        model_dirs = [
+            'stable-video-diffusion',
+            'stable-diffusion', 
+            'bark',
+            'huggingface'  # Common cache directory
+        ]
+        
+        deleted_count = 0
+        total_size = 0
+        
+        for model_dir in model_dirs:
+            model_path = models_dir / model_dir
+            if model_path.exists() and model_path.is_dir():
+                try:
+                    # Calculate size before deletion
+                    for file_path in model_path.rglob('*'):
+                        if file_path.is_file():
+                            total_size += file_path.stat().st_size
+                    
+                    # Delete the directory
+                    shutil.rmtree(model_path)
+                    deleted_count += 1
+                    print(f"Deleted model directory: {model_path}")
+                except Exception as e:
+                    print(f"Error deleting {model_path}: {e}")
+                    continue
+        
+        # Also clear any cache directories
+        cache_dirs = [
+            pathlib.Path.home() / '.cache' / 'huggingface',
+            pathlib.Path.home() / '.cache' / 'torch',
+        ]
+        
+        for cache_dir in cache_dirs:
+            if cache_dir.exists():
+                try:
+                    for file_path in cache_dir.rglob('*'):
+                        if file_path.is_file():
+                            total_size += file_path.stat().st_size
+                    shutil.rmtree(cache_dir)
+                    print(f"Deleted cache directory: {cache_dir}")
+                except Exception as e:
+                    print(f"Error deleting cache {cache_dir}: {e}")
+        
+        # Restart models after deletion
+        restart_models()
+        
+        size_mb = total_size / (1024 * 1024)
+        return {
+            "message": f"Successfully deleted {deleted_count} model directories",
+            "deleted_directories": deleted_count,
+            "freed_space_mb": round(size_mb, 2)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete models: {str(e)}")
 
 async def generate_video(job_id: str, request: GenerationRequest):
     """Generate video in background"""
@@ -395,7 +637,8 @@ async def generate_audio(job_id: str, request: GenerationRequest):
         })
 
 # Mount static files for serving generated media (after all API routes)
-app.mount("/outputs", StaticFiles(directory="../outputs"), name="outputs")
+# Removed static file mount to avoid Unicode encoding issues with binary files
+# Using FileResponse endpoints instead for proper binary file handling
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

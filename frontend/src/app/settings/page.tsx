@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Trash2, Cpu, RefreshCw, Download, Volume2, Play, Pause, CheckCircle, XCircle, AlertTriangle, Zap, Settings as SettingsIcon } from 'lucide-react';
+import { Trash2, Cpu, RefreshCw, Download, Volume2, Play, Pause, CheckCircle, XCircle, AlertTriangle, Zap, Settings as SettingsIcon, CloudDownload } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 interface Model {
@@ -26,6 +26,19 @@ export default function Page() {
   }>({ video_models: [], audio_models: [] });
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelLoadingStates, setModelLoadingStates] = useState<Record<string, boolean>>({});
+  
+  // Download state
+  const [downloadStatus, setDownloadStatus] = useState({
+    is_downloading: false,
+    progress: 0,
+    current_model: "",
+    status: "idle",
+    message: "",
+    error: null
+  });
+  
+  // Delete state
+  const [deleting, setDeleting] = useState(false);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -52,6 +65,74 @@ export default function Page() {
       console.error('Failed to fetch models:', err);
     } finally {
       setLoadingModels(false);
+    }
+  };
+
+  const fetchDownloadStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/download-status');
+      const data = await response.json();
+      setDownloadStatus(data);
+    } catch (err) {
+      console.error('Failed to fetch download status:', err);
+    }
+  };
+
+  const startDownload = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/download-models', {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        // Start polling for download status
+        const pollInterval = setInterval(async () => {
+          await fetchDownloadStatus();
+          
+          // Stop polling if download is complete or error
+          if (downloadStatus.status === 'completed' || downloadStatus.status === 'error') {
+            clearInterval(pollInterval);
+            // Refresh models after download
+            await fetchModels();
+          }
+        }, 1000);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.detail || 'Failed to start download');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const deleteModels = async () => {
+    if (!confirm('Are you sure you want to delete all downloaded models? This action cannot be undone and will free up significant disk space.')) {
+      return;
+    }
+    
+    setDeleting(true);
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:8000/delete-models', {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        // Refresh models after deletion
+        await fetchModels();
+        // Show success message
+        setError(null);
+        // You could add a success state here if needed
+        console.log('Models deleted successfully:', result);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.detail || 'Failed to delete models');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -82,6 +163,7 @@ export default function Page() {
   useEffect(() => {
     fetchSettings();
     fetchModels();
+    fetchDownloadStatus();
   }, []);
 
   const clearOutputs = async () => {
@@ -129,170 +211,137 @@ export default function Page() {
         </div>
       )}
 
-      {/* Primary Models Section */}
+
+      {/* Model Download Section */}
       <div className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-xl bg-white dark:bg-gradient-to-br dark:from-slate-900/90 dark:to-slate-800/50 backdrop-blur-md`}>
         <div className="flex items-center space-x-3 mb-6">
-          <div className="p-2 rounded-xl bg-accent-green/10">
-            <Zap className="h-6 w-6 text-accent-green" />
+          <div className="p-2 rounded-xl bg-accent-blue/10">
+            <CloudDownload className="h-6 w-6 text-accent-blue" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-accent-green">Primary AI Models</h2>
-            <p className={`text-sm ${colors.text.secondary}`}>Load the main models for video and audio generation</p>
+            <h2 className="text-xl font-bold text-accent-blue">Download AI Models</h2>
+            <p className={`text-sm ${colors.text.secondary}`}>Download the latest AI models for optimal performance</p>
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Video Model */}
-          {primaryVideoModel && (
-            <div className={`p-6 rounded-xl border-2 transition-all duration-300 ${
-              primaryVideoModel.loaded
-                ? 'border-accent-green/50 bg-accent-green/5'
-                : 'border-gray-200 dark:border-slate-600 hover:border-accent-blue/50'
-            }`}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="p-2 rounded-lg bg-accent-blue/10">
-                      <Play className="h-5 w-5 text-accent-blue" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-accent-blue">Stable Video Diffusion</h3>
-                      <p className="text-sm text-gray-500">Primary video generation model</p>
-                    </div>
-                    {primaryVideoModel.loaded ? (
-                      <CheckCircle className="h-6 w-6 text-accent-green" />
-                    ) : (
-                      <XCircle className="h-6 w-6 text-gray-400" />
-                    )}
-                  </div>
-                  <p className={`text-sm ${colors.text.secondary} mb-4`}>
-                    High-quality text-to-video generation with excellent motion and detail
-                  </p>
-                  <div className="flex items-center gap-2 text-xs mb-4">
-                    <span className={`px-3 py-1 rounded-full ${
-                      primaryVideoModel.loaded 
-                        ? 'bg-accent-green/10 text-accent-green' 
-                        : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                    }`}>
-                      {primaryVideoModel.loaded ? 'Ready to use' : 'Not loaded'}
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-accent-blue/10 text-accent-blue">
-                      {primaryVideoModel.resolution || '1024x576'}
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-accent-violet/10 text-accent-violet">
-                      Max: {primaryVideoModel.max_duration}s
-                    </span>
-                  </div>
+        <div className="space-y-6">
+          {/* Download Progress */}
+          {downloadStatus.is_downloading && (
+            <div className="p-4 rounded-xl bg-accent-blue/5 border border-accent-blue/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-accent-blue border-t-transparent rounded-full animate-spin"></div>
+                  <span className="font-medium text-accent-blue">Downloading Models...</span>
                 </div>
+                <span className="text-sm font-mono text-accent-blue">{downloadStatus.progress}%</span>
               </div>
-              <button
-                onClick={() => handleToggleModel(primaryVideoModel.id, 'video')}
-                disabled={modelLoadingStates[primaryVideoModel.id]}
-                className={`w-full px-4 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 ${
-                  primaryVideoModel.loaded
-                    ? 'bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30'
-                    : 'bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30'
-                } ${modelLoadingStates[primaryVideoModel.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {modelLoadingStates[primaryVideoModel.id] ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center space-x-2">
-                    {primaryVideoModel.loaded ? (
-                      <>
-                        <XCircle className="h-4 w-4" />
-                        <span>Unload Model</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        <span>Load Model</span>
-                      </>
-                    )}
-                  </div>
+              
+              <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-3">
+                <div 
+                  className="bg-accent-blue h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${downloadStatus.progress}%` }}
+                ></div>
+              </div>
+              
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                <p className="font-medium">{downloadStatus.message}</p>
+                {downloadStatus.current_model && (
+                  <p className="text-xs mt-1">Current: {downloadStatus.current_model}</p>
                 )}
-              </button>
+              </div>
             </div>
           )}
 
-          {/* Audio Model */}
-          {primaryAudioModel && (
-            <div className={`p-6 rounded-xl border-2 transition-all duration-300 ${
-              primaryAudioModel.loaded
-                ? 'border-accent-green/50 bg-accent-green/5'
-                : 'border-gray-200 dark:border-slate-600 hover:border-accent-violet/50'
-            }`}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="p-2 rounded-lg bg-accent-violet/10">
-                      <Volume2 className="h-5 w-5 text-accent-violet" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg text-accent-violet">Bark</h3>
-                      <p className="text-sm text-gray-500">Primary audio generation model</p>
-                    </div>
-                    {primaryAudioModel.loaded ? (
-                      <CheckCircle className="h-6 w-6 text-accent-green" />
-                    ) : (
-                      <XCircle className="h-6 w-6 text-gray-400" />
-                    )}
-                  </div>
-                  <p className={`text-sm ${colors.text.secondary} mb-4`}>
-                    High-quality text-to-speech with natural voice synthesis
-                  </p>
-                  <div className="flex items-center gap-2 text-xs mb-4">
-                    <span className={`px-3 py-1 rounded-full ${
-                      primaryAudioModel.loaded 
-                        ? 'bg-accent-green/10 text-accent-green' 
-                        : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
-                    }`}>
-                      {primaryAudioModel.loaded ? 'Ready to use' : 'Not loaded'}
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-accent-violet/10 text-accent-violet">
-                      {primaryAudioModel.sample_rate || 22050}Hz
-                    </span>
-                    <span className="px-3 py-1 rounded-full bg-accent-blue/10 text-accent-blue">
-                      Max: {primaryAudioModel.max_duration}s
-                    </span>
-                  </div>
-                </div>
+          {/* Download Status Messages */}
+          {downloadStatus.status === 'completed' && (
+            <div className="p-4 rounded-xl bg-accent-green/5 border border-accent-green/20">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-accent-green" />
+                <span className="font-medium text-accent-green">Download Complete!</span>
               </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                All models have been downloaded successfully. You can now use them for generation.
+              </p>
+            </div>
+          )}
+
+          {downloadStatus.status === 'error' && (
+            <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20">
+              <div className="flex items-center space-x-2">
+                <XCircle className="h-5 w-5 text-red-500" />
+                <span className="font-medium text-red-500">Download Failed</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                {downloadStatus.error || 'An error occurred during download. Please try again.'}
+              </p>
+            </div>
+          )}
+
+          {/* Download/Delete Button */}
+          <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-slate-800/50">
+            <div>
+              <h3 className="font-semibold text-lg">
+                {models.video_models.length > 0 || models.audio_models.length > 0 
+                  ? "Manage Downloaded Models" 
+                  : "Download All Models"
+                }
+              </h3>
+              <p className={`text-sm ${colors.text.secondary} mt-1`}>
+                {models.video_models.length > 0 || models.audio_models.length > 0 
+                  ? "Models are downloaded and ready to use. Delete them to free up space."
+                  : "Download Stable Video Diffusion, Stable Diffusion, and Bark models (~13GB total)"
+                }
+              </p>
+            </div>
+            
+            {/* Show delete button if models are downloaded */}
+            {models.video_models.length > 0 || models.audio_models.length > 0 ? (
               <button
-                onClick={() => handleToggleModel(primaryAudioModel.id, 'audio')}
-                disabled={modelLoadingStates[primaryAudioModel.id]}
-                className={`w-full px-4 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 ${
-                  primaryAudioModel.loaded
-                    ? 'bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30'
-                    : 'bg-accent-violet/10 text-accent-violet hover:bg-accent-violet/20 border border-accent-violet/30'
-                } ${modelLoadingStates[primaryAudioModel.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={deleteModels}
+                disabled={deleting || downloadStatus.is_downloading}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 ${
+                  deleting || downloadStatus.is_downloading
+                    ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 cursor-not-allowed'
+                    : 'bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30'
+                }`}
               >
-                {modelLoadingStates[primaryAudioModel.id] ? (
-                  <div className="flex items-center justify-center space-x-2">
+                {deleting ? (
+                  <div className="flex items-center space-x-2">
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    <span>Loading...</span>
+                    <span>Deleting...</span>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center space-x-2">
-                    {primaryAudioModel.loaded ? (
-                      <>
-                        <XCircle className="h-4 w-4" />
-                        <span>Unload Model</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        <span>Load Model</span>
-                      </>
-                    )}
+                  <div className="flex items-center space-x-2">
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete Models</span>
                   </div>
                 )}
               </button>
-            </div>
-          )}
+            ) : (
+              /* Show download button if no models are downloaded */
+              <button
+                onClick={startDownload}
+                disabled={downloadStatus.is_downloading}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 ${
+                  downloadStatus.is_downloading
+                    ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 cursor-not-allowed'
+                    : 'bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30'
+                }`}
+              >
+                {downloadStatus.is_downloading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                    <span>Downloading...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <CloudDownload className="h-4 w-4" />
+                    <span>Download Models</span>
+                  </div>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
