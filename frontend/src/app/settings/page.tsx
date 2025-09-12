@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { Trash2, Cpu, RefreshCw, Volume2, Play, CheckCircle, XCircle, AlertTriangle, Zap, Settings as SettingsIcon, CloudDownload, HardDrive, Clock, FileText } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { ProgressModal } from '@/components/ProgressModal';
 
 interface Model {
   id: string;
@@ -75,26 +74,6 @@ export default function Page() {
     error: null
   });
   
-  // Modal state
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'download' | 'delete'>('download');
-  const [modalProgress, setModalProgress] = useState(0);
-  const [modalStatus, setModalStatus] = useState<'idle' | 'in_progress' | 'completed' | 'error'>('idle');
-  const [modalCurrentStep, setModalCurrentStep] = useState('');
-  const [modalDetails, setModalDetails] = useState<string[]>([]);
-  const [modalError, setModalError] = useState<string | null>(null);
-  const [modalModelProgress, setModalModelProgress] = useState<Array<{
-    name: string;
-    size: string;
-    progress: number;
-    status: 'pending' | 'downloading' | 'completed' | 'error';
-    speed?: string;
-    eta?: string;
-    downloaded_mb?: number;
-    size_gb?: number;
-    speed_mbps?: number;
-    eta_seconds?: number;
-  }>>([]);
   const [clearingData, setClearingData] = useState(false);
 
   const fetchSettings = async () => {
@@ -146,47 +125,6 @@ export default function Page() {
       error: null
     });
     
-    setModalType('download');
-    setModalOpen(true);
-    setModalStatus('in_progress');
-    setModalProgress(0);
-    setModalCurrentStep('Starting download...');
-    setModalDetails(['Preparing to download AI models', 'This may take several minutes']);
-    setModalError(null);
-    
-    // Initialize model progress tracking with backend data
-    setModalModelProgress([
-      {
-        name: 'Stable Video Diffusion',
-        size: '~4GB',
-        progress: 0,
-        status: 'pending',
-        size_gb: 4.0,
-        downloaded_mb: 0,
-        speed_mbps: 0,
-        eta_seconds: 0
-      },
-      {
-        name: 'Stable Diffusion',
-        size: '~4GB', 
-        progress: 0,
-        status: 'pending',
-        size_gb: 4.0,
-        downloaded_mb: 0,
-        speed_mbps: 0,
-        eta_seconds: 0
-      },
-      {
-        name: 'Bark',
-        size: '~5GB',
-        progress: 0,
-        status: 'pending',
-        size_gb: 5.0,
-        downloaded_mb: 0,
-        speed_mbps: 0,
-        eta_seconds: 0
-      }
-    ]);
     
     try {
       const response = await fetch('http://localhost:8000/download-models', {
@@ -198,52 +136,12 @@ export default function Page() {
         const pollInterval = setInterval(async () => {
           await fetchDownloadStatus();
           
-          // Update modal with current progress
-          setModalProgress(downloadStatus.progress);
-          setModalCurrentStep(downloadStatus.message || 'Downloading...');
-          
-          // Update individual model progress from backend data
-          if (downloadStatus.models) {
-            setModalModelProgress(prev => prev.map(model => {
-              // Find matching model in backend data
-              const backendModel = Object.values(downloadStatus.models!).find(
-                (bm) => bm.name === model.name
-              );
-              
-              if (backendModel) {
-                return {
-                  ...model,
-                  status: backendModel.status as 'pending' | 'downloading' | 'completed' | 'error',
-                  progress: backendModel.progress || 0,
-                  downloaded_mb: backendModel.downloaded_mb || 0,
-                  speed_mbps: backendModel.speed_mbps || 0,
-                  eta_seconds: backendModel.eta_seconds || 0
-                };
-              }
-              return model;
-            }));
-            
-            setModalDetails([
-              `Downloading: ${downloadStatus.current_model}`,
-              `Overall Progress: ${downloadStatus.progress}%`,
-              'This may take several minutes depending on your internet speed'
-            ]);
-          }
+          // Update download status
+          setDownloadStatus(downloadStatus);
           
           // Stop polling if download is complete or error
           if (downloadStatus.status === 'completed') {
             clearInterval(pollInterval);
-            setModalStatus('completed');
-            setModalProgress(100);
-            setModalCurrentStep('Download completed successfully!');
-            setModalDetails(['All models downloaded successfully', 'Models are now ready to use']);
-            
-            // Mark all models as completed
-            setModalModelProgress(prev => prev.map(model => ({
-              ...model,
-              status: 'completed' as const,
-              progress: 100
-            })));
             
             // Load models after download completion
             try {
@@ -263,44 +161,32 @@ export default function Page() {
             await fetchModels();
           } else if (downloadStatus.status === 'error') {
             clearInterval(pollInterval);
-            setModalStatus('error');
-            setModalError(downloadStatus.error || 'Download failed');
-            setModalDetails(['Download encountered an error', 'Please check your internet connection and try again']);
-            
-            // Mark current model as error
-            setModalModelProgress(prev => prev.map(model => {
-              if (model.status === 'downloading') {
-                return {
-                  ...model,
-                  status: 'error' as const
-                };
-              }
-              return model;
-            }));
           }
         }, 1000);
       } else {
         const errorData = await response.json();
-        setModalStatus('error');
-        setModalError(errorData.detail || 'Failed to start download');
-        setModalDetails(['Failed to initiate download', 'Please try again']);
+        setDownloadStatus({
+          is_downloading: false,
+          progress: 0,
+          current_model: "",
+          status: "error",
+          message: "Download failed",
+          error: errorData.detail || 'Failed to start download'
+        });
       }
     } catch (err: unknown) {
-      setModalStatus('error');
-      setModalError(err instanceof Error ? err.message : 'Network error occurred');
-      setModalDetails(['Network error occurred', 'Please check your connection']);
+      setDownloadStatus({
+        is_downloading: false,
+        progress: 0,
+        current_model: "",
+        status: "error",
+        message: "Download failed",
+        error: err instanceof Error ? err.message : 'Network error occurred'
+      });
     }
   };
 
   const deleteModels = async () => {
-    setModalType('delete');
-    setModalOpen(true);
-    setModalStatus('in_progress');
-    setModalProgress(0);
-    setModalCurrentStep('Preparing to delete models...');
-    setModalDetails(['This will free up significant disk space', 'Deleting model files and cache directories']);
-    setModalError(null);
-    
     try {
       const response = await fetch('http://localhost:8000/delete-models', {
         method: 'POST',
@@ -309,47 +195,15 @@ export default function Page() {
       if (response.ok) {
         const result = await response.json();
         
-        // Simulate progress steps
-        setModalProgress(25);
-        setModalCurrentStep('Deleting model directories...');
-        setModalDetails(['Removing Stable Video Diffusion models', 'Removing Stable Diffusion models', 'Removing Bark models']);
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setModalProgress(50);
-        setModalCurrentStep('Clearing cache directories...');
-        setModalDetails(['Clearing HuggingFace cache', 'Clearing PyTorch cache', 'Freeing up disk space']);
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setModalProgress(75);
-        setModalCurrentStep('Restarting model system...');
-        setModalDetails(['Updating model registry', 'Refreshing available models']);
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        setModalProgress(100);
-        setModalStatus('completed');
-        setModalCurrentStep('Deletion completed successfully!');
-        setModalDetails([
-          `Deleted ${result.deleted_directories || 0} model directories`,
-          `Freed ${result.freed_space_mb || 0} MB of disk space`,
-          'Models have been removed from the system'
-        ]);
-        
         // Refresh models after deletion
         await fetchModels();
         setError(null);
       } else {
         const errorData = await response.json();
-        setModalStatus('error');
-        setModalError(errorData.detail || 'Failed to delete models');
-        setModalDetails(['Deletion failed', 'Please try again or check system permissions']);
+        setError(errorData.detail || 'Failed to delete models');
       }
     } catch (err: unknown) {
-      setModalStatus('error');
-      setModalError(err instanceof Error ? err.message : 'Network error occurred');
-      setModalDetails(['Network error occurred', 'Please check your connection and try again']);
+      setError(err instanceof Error ? err.message : 'Network error occurred');
     }
   };
 
@@ -721,24 +575,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Progress Modal */}
-      <ProgressModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onRetry={modalType === 'download' ? startDownload : undefined}
-        title={modalType === 'download' ? 'Downloading AI Models' : 'Deleting AI Models'}
-        description={modalType === 'download' 
-          ? 'Downloading the latest AI models for optimal performance' 
-          : 'Removing downloaded models to free up disk space'
-        }
-        progress={modalProgress}
-        status={modalStatus}
-        currentStep={modalCurrentStep}
-        details={modalDetails}
-        error={modalError || undefined}
-        type={modalType}
-        modelProgress={modalModelProgress}
-      />
     </div>
   );
 }
