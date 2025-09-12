@@ -206,11 +206,17 @@ class ModelDownloader:
     def get_model_info(self, model_name: str) -> Optional[Dict]:
         """Get information about a specific model"""
         if model_name in self.video_models:
-            return {"type": "video", **self.video_models[model_name]}
+            model_config = self.video_models[model_name].copy()
+            model_config["type"] = "video"  # Override the internal type
+            return model_config
         elif model_name in self.image_models:
-            return {"type": "image", **self.image_models[model_name]}
+            model_config = self.image_models[model_name].copy()
+            model_config["type"] = "image"  # Override the internal type
+            return model_config
         elif model_name in self.audio_models:
-            return {"type": "audio", **self.audio_models[model_name]}
+            model_config = self.audio_models[model_name].copy()
+            model_config["type"] = "audio"  # Override the internal type
+            return model_config
         return None
 
 def main():
