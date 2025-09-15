@@ -22,6 +22,90 @@ export default function Page() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [results, setResults] = useState<GenerationResult[]>([]);
   const [currentStep, setCurrentStep] = useState<'prompt' | 'progress' | 'results'>('prompt');
+  
+  // Check for existing job on mount
+  useEffect(() => {
+    const checkExistingJob = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/jobs');
+        if (response.ok) {
+          const jobs = await response.json();
+          const activeJob = jobs.find((job: any) => 
+            job.status === 'processing' || job.status === 'queued'
+          );
+          
+          if (activeJob) {
+            setCurrentJobId(activeJob.job_id);
+            setCurrentStep('progress');
+            setIsGenerating(true);
+            
+            // Add to results if not already there
+            const existingResult = results.find(r => r.id === activeJob.job_id);
+            if (!existingResult) {
+              const newResult: GenerationResult = {
+                id: activeJob.job_id,
+                prompt: activeJob.prompt || '',
+                status: activeJob.status === 'processing' ? 'processing' : 'queued',
+                progress: activeJob.progress || 0,
+                createdAt: activeJob.created_at,
+                settings
+              };
+              setResults([newResult]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check existing jobs:', error);
+      }
+    };
+    
+    checkExistingJob();
+  }, []);
+  
+  // Poll for job updates when there's an active job
+  useEffect(() => {
+    if (!currentJobId) return;
+    
+    const pollJobStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/jobs');
+        if (response.ok) {
+          const jobs = await response.json();
+          const currentJob = jobs.find((job: any) => job.job_id === currentJobId);
+          
+          if (currentJob) {
+            setResults(prev => prev.map(result => 
+              result.id === currentJobId 
+                ? {
+                    ...result,
+                    status: currentJob.status === 'completed' ? 'completed' : 
+                           currentJob.status === 'failed' ? 'failed' : 
+                           currentJob.status === 'processing' ? 'processing' : 'queued',
+                    progress: currentJob.progress || 0,
+                    outputFile: currentJob.output_file,
+                    error: currentJob.error
+                  }
+                : result
+            ));
+            
+            // Update step based on status
+            if (currentJob.status === 'completed') {
+              setCurrentStep('results');
+              setIsGenerating(false);
+            } else if (currentJob.status === 'failed') {
+              setCurrentStep('results');
+              setIsGenerating(false);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to poll job status:', error);
+      }
+    };
+    
+    const interval = setInterval(pollJobStatus, 2000);
+    return () => clearInterval(interval);
+  }, [currentJobId]);
   const [settings, setSettings] = useState({
     format: 'mp4'
   });
