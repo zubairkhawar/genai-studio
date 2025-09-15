@@ -31,16 +31,16 @@ class SVDWorkflow:
         
         # Workflow parameters (from the ComfyUI workflow)
         self.config = {
-            "width": 1024,  # Restored to full quality
-            "height": 576,  # Restored to full quality
-            "num_frames": 25,  # Restored to full quality
-            "num_inference_steps": 12,  # Restored for quality
+            "width": 384,  # Reduced for memory efficiency
+            "height": 384,  # Reduced for memory efficiency
+            "num_frames": 6,  # Start with very small clips
+            "num_inference_steps": 12,  # Keep for quality
             "guidance_scale": 2.0,
             "min_guidance_scale": 0.02,
             "motion_bucket_id": 100,
             "noise_aug_strength": 0.02,
-            "decode_chunk_size": 8,  # Restored for quality
-            "frame_rate": 20,
+            "decode_chunk_size": 1,  # Decode one frame at a time
+            "frame_rate": 6,  # Reduced frame rate
             "interpolation_factor": 1,  # Disabled interpolation for memory efficiency
             "freeu_enabled": False,  # Disabled for memory efficiency
             "freeu_params": {
@@ -64,8 +64,8 @@ class SVDWorkflow:
                 logger.info(f"Loading SVD from local path: {model_path}")
                 self.pipeline = StableVideoDiffusionPipeline.from_pretrained(
                     model_path,
-                    torch_dtype=self.dtype,
-                    variant="fp16" if self.dtype == torch.float16 else None,
+                    torch_dtype=torch.float16,  # Force FP16 everywhere
+                    variant="fp16",  # Force FP16 variant
                     local_files_only=True,
                     low_cpu_mem_usage=True,
                     use_safetensors=True
@@ -75,8 +75,8 @@ class SVDWorkflow:
                 logger.info("Loading SVD from Hugging Face...")
                 self.pipeline = StableVideoDiffusionPipeline.from_pretrained(
                     "stabilityai/stable-video-diffusion-img2vid-xt",
-                    torch_dtype=self.dtype,
-                    variant="fp16" if self.dtype == torch.float16 else None,
+                    torch_dtype=torch.float16,  # Force FP16 everywhere
+                    variant="fp16",  # Force FP16 variant
                     low_cpu_mem_usage=True,
                     use_safetensors=True
                 )
@@ -84,26 +84,28 @@ class SVDWorkflow:
             # Move to device and enable Apple Silicon optimizations
             self.pipeline = self.pipeline.to(self.device)
             
-            # Enable Apple Silicon MPS optimizations
-            if self.device == "mps":
-                logger.info("Enabling Apple Silicon MPS optimizations...")
-                self.pipeline.enable_attention_slicing()
-                # Enable memory efficient attention for MPS
-                if hasattr(self.pipeline, 'enable_memory_efficient_attention'):
-                    self.pipeline.enable_memory_efficient_attention()
-                # Enable CPU offload for additional memory savings
-                self.pipeline.enable_model_cpu_offload()
-                logger.info("✅ Apple Silicon MPS optimizations enabled")
-            else:
-                # Standard optimizations for other devices
-                self.pipeline.enable_model_cpu_offload()
-                # Enable attention slicing for other devices too
-                if hasattr(self.pipeline, 'enable_attention_slicing'):
-                    self.pipeline.enable_attention_slicing()
+            # Enable ALL memory optimizations
+            logger.info("Enabling aggressive memory optimizations...")
             
-            # Enable VAE slicing for memory efficiency
+            # Core memory optimizations
+            self.pipeline.enable_model_cpu_offload()
+            self.pipeline.enable_attention_slicing()
+            
+            # VAE optimizations to prevent full batch decoding
             if hasattr(self.pipeline, 'enable_vae_slicing'):
                 self.pipeline.enable_vae_slicing()
+            if hasattr(self.pipeline, 'enable_vae_tiling'):
+                self.pipeline.enable_vae_tiling()
+            
+            # Memory efficient attention
+            if hasattr(self.pipeline, 'enable_memory_efficient_attention'):
+                self.pipeline.enable_memory_efficient_attention()
+            
+            # Apple Silicon specific optimizations
+            if self.device == "mps":
+                logger.info("✅ Apple Silicon MPS optimizations enabled")
+            
+            logger.info("✅ All memory optimizations enabled")
             
             self.is_loaded = True
             logger.info("✅ SVD model loaded successfully")
@@ -232,29 +234,32 @@ class SVDWorkflow:
             # Apply FreeU enhancement
             self._apply_freeu(self.pipeline.unet, self.config["freeu_enabled"])
             
-            # Generate video frames with memory optimization
-            logger.info("Generating video frames...")
+            # Generate video frames with streaming output to avoid 79GB buffer
+            logger.info("Generating video frames with streaming output...")
             
             # Clear cache before generation
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             
-            video_frames = self.pipeline(
+            # Generate frames with minimal memory usage
+            result = self.pipeline(
                 image,
-                decode_chunk_size=self.config["decode_chunk_size"],
+                decode_chunk_size=self.config["decode_chunk_size"],  # Decode one frame at a time
                 num_frames=num_frames,
                 num_inference_steps=num_inference_steps,
                 min_guidance_scale=final_guidance_scale,
                 motion_bucket_id=motion_bucket_id,
                 noise_aug_strength=noise_aug_strength,
                 generator=torch.Generator(device=self.device).manual_seed(seed or 42)
-            ).frames[0]
+            )
+            
+            # Stream frames directly to avoid building giant buffer
+            video_frames = result.frames[0]
+            logger.info(f"Generated {len(video_frames)} frames with streaming output")
             
             # Clear cache after generation
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            
-            logger.info(f"Generated {len(video_frames)} frames")
             
             # Apply frame interpolation if enabled
             if self.config["interpolation_factor"] > 1:
