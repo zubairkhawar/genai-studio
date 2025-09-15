@@ -919,6 +919,74 @@ async def generate_voice_previews():
     except Exception as e:
         print(f"❌ Error generating voice previews: {e}")
 
+@app.get("/bark-voices")
+async def get_bark_voices():
+    """Get list of available Bark voices"""
+    voices = [
+        {
+            "id": "v2/en_speaker_0",
+            "name": "Male Speaker 1",
+            "description": "Clear male voice with neutral tone",
+            "type": "male"
+        },
+        {
+            "id": "v2/en_speaker_1", 
+            "name": "Female Speaker 1",
+            "description": "Warm female voice with friendly tone",
+            "type": "female"
+        },
+        {
+            "id": "v2/en_speaker_2",
+            "name": "Male Speaker 2", 
+            "description": "Deep male voice with authoritative tone",
+            "type": "male"
+        },
+        {
+            "id": "v2/en_speaker_3",
+            "name": "Female Speaker 2",
+            "description": "Bright female voice with energetic tone", 
+            "type": "female"
+        },
+        {
+            "id": "v2/en_speaker_4",
+            "name": "Male Speaker 3",
+            "description": "Smooth male voice with calm tone",
+            "type": "male"
+        },
+        {
+            "id": "v2/en_speaker_5",
+            "name": "Female Speaker 3", 
+            "description": "Professional female voice with clear articulation",
+            "type": "female"
+        },
+        {
+            "id": "v2/en_speaker_6",
+            "name": "Male Speaker 4",
+            "description": "Casual male voice with relaxed tone",
+            "type": "male"
+        },
+        {
+            "id": "v2/en_speaker_7",
+            "name": "Female Speaker 4",
+            "description": "Gentle female voice with soothing tone",
+            "type": "female"
+        },
+        {
+            "id": "v2/en_speaker_8",
+            "name": "Male Speaker 5",
+            "description": "Confident male voice with strong presence",
+            "type": "male"
+        },
+        {
+            "id": "v2/en_speaker_9",
+            "name": "Female Speaker 5",
+            "description": "Expressive female voice with dynamic range",
+            "type": "female"
+        }
+    ]
+    
+    return {"voices": voices}
+
 @app.post("/generate-voice-previews")
 async def generate_voice_previews_endpoint():
     """Generate voice preview samples"""
