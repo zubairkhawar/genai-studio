@@ -142,22 +142,20 @@ export default function Page() {
     setResults([]);
     
     try {
-      const formData = new FormData();
-      formData.append('prompt', prompt.trim());
-      formData.append('model_type', 'video');
-      formData.append('model_name', 'stable-video-diffusion');
-      formData.append('duration', '4'); // Optimal for SVD: 4 seconds
-      formData.append('output_format', settings.format);
-      formData.append('generation_mode', generationMode);
-      
-      // Add image if in image-to-video mode
-      if (generationMode === 'image-to-video' && uploadedImage) {
-        formData.append('image', uploadedImage);
-      }
+      const requestData = {
+        prompt: prompt.trim(),
+        model_type: 'video',
+        model_name: 'stable-video-diffusion',
+        duration: 4, // Optimal for SVD: 4 seconds
+        output_format: settings.format
+      };
       
       const response = await fetch('http://localhost:8000/generate', {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
       });
       
       const result = await response.json();
