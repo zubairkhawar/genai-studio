@@ -57,7 +57,7 @@ download_status = {
     "models": {
         "stable-video-diffusion": {
             "name": "Stable Video Diffusion",
-            "size_gb": 4.0,
+            "size_gb": 5.0,
             "downloaded_mb": 0,
             "progress": 0,
             "speed_mbps": 0,
@@ -93,6 +93,7 @@ class GenerationRequest(BaseModel):
     sample_rate: Optional[int] = 22050  # for audio
     output_format: str = "mp4"  # mp4, wav, mp3
     voice_style: Optional[str] = "auto"  # for audio voice selection
+    voice_id: Optional[str] = None  # specific Bark voice ID
 
 class GenerationResponse(BaseModel):
     job_id: str
@@ -307,6 +308,14 @@ async def delete_output_file(file_type: str, filename: str):
 @app.get("/models")
 async def get_available_models():
     """Get list of available models"""
+    global video_generator, audio_generator
+    
+    # Initialize generators if they don't exist
+    if not video_generator or not audio_generator:
+        gpu_info = gpu_detector.detect_gpu()
+        video_generator = VideoGenerator(gpu_info)
+        audio_generator = AudioGenerator(gpu_info)
+    
     return {
         "video_models": video_generator.get_available_models() if video_generator else [],
         "audio_models": audio_generator.get_available_models() if audio_generator else []
@@ -429,16 +438,89 @@ async def get_voice_previews():
         preview_files = []
         for file_path in previews_dir.iterdir():
             if file_path.is_file() and file_path.suffix.lower() == '.wav':
-                # Extract voice style from filename (e.g., "professional-preview.wav" -> "professional")
-                voice_style = file_path.stem.replace('-preview', '')
+                # Extract voice ID from filename (e.g., "v2_en_speaker_0-preview.wav" -> "v2/en_speaker_0")
+                voice_id = file_path.stem.replace('-preview', '').replace('_', '/')
                 preview_files.append({
-                    "voice_style": voice_style,
+                    "voice_id": voice_id,
+                    "voice_name": voice_id.replace('v2/', '').replace('_', ' ').title(),
                     "filename": file_path.name,
                     "size": file_path.stat().st_size,
                     "url": f"/outputs/voice-previews/{file_path.name}"
                 })
         
-        return {"previews": sorted(preview_files, key=lambda x: x["voice_style"])}
+        return {"previews": sorted(preview_files, key=lambda x: x["voice_id"])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/bark-voices")
+async def get_bark_voices():
+    """Get list of available Bark voices"""
+    try:
+        # Define available Bark voices with descriptions
+        bark_voices = [
+            {
+                "id": "v2/en_speaker_0",
+                "name": "Default Speaker",
+                "description": "Clear and natural default English voice",
+                "type": "default"
+            },
+            {
+                "id": "v2/en_speaker_1", 
+                "name": "Alternative Speaker",
+                "description": "Alternative English speaker with distinct tone",
+                "type": "alternative"
+            },
+            {
+                "id": "v2/en_speaker_2",
+                "name": "Warm Speaker", 
+                "description": "Warm and friendly character voice",
+                "type": "friendly"
+            },
+            {
+                "id": "v2/en_speaker_3",
+                "name": "Professional Speaker",
+                "description": "Professional and authoritative tone",
+                "type": "professional"
+            },
+            {
+                "id": "v2/en_speaker_4",
+                "name": "Storyteller",
+                "description": "Perfect for storytelling and narration",
+                "type": "narrator"
+            },
+            {
+                "id": "v2/en_speaker_5",
+                "name": "Casual Speaker",
+                "description": "Casual and conversational style",
+                "type": "casual"
+            },
+            {
+                "id": "v2/en_speaker_6",
+                "name": "Female Voice",
+                "description": "Clear and engaging female voice",
+                "type": "female"
+            },
+            {
+                "id": "v2/en_speaker_7",
+                "name": "Male Voice", 
+                "description": "Deep and characterful male voice",
+                "type": "male"
+            },
+            {
+                "id": "v2/en_speaker_8",
+                "name": "Young Voice",
+                "description": "Energetic voice perfect for children's content",
+                "type": "child"
+            },
+            {
+                "id": "v2/en_speaker_9",
+                "name": "Narrator Voice",
+                "description": "Clear and authoritative narrator voice",
+                "type": "narrator"
+            }
+        ]
+        
+        return {"voices": bark_voices}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -511,8 +593,8 @@ def download_models_background():
     global download_status
     
     try:
-        # Get the script path
-        script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.sh"
+        # Get the Python script path (prefer Python script over shell script)
+        script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
         
         if not script_path.exists():
             raise Exception("Download script not found")
@@ -524,9 +606,58 @@ def download_models_background():
             {"name": "bark", "type": "audio"}
         ]
         
-        total_models = len(models)
+        # Check which models actually need downloading
+        models_to_download = []
+        for model in models:
+            model_id = model["name"]
+            model_info = download_status["models"][model_id]
+            
+            # Check if model already exists and is complete
+            if model["type"] == "video":
+                model_path = pathlib.Path(f"../models/video/{model_id}")
+            elif model["type"] == "image":
+                model_path = pathlib.Path(f"../models/image/{model_id}")
+            elif model["type"] == "audio":
+                model_path = pathlib.Path(f"../models/audio/{model_id}")
+            
+            # Check if model has actual weight files (not just config)
+            has_weights = False
+            if model_path.exists():
+                # Look for actual model weight files
+                weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
+                has_weights = len(weight_files) > 0
+            
+            if has_weights:
+                # Model already exists and is complete
+                download_status["models"][model_id].update({
+                    "downloaded_mb": model_info["size_gb"] * 1024,
+                    "progress": 100,
+                    "speed_mbps": 0,
+                    "eta_seconds": 0,
+                    "status": "completed"
+                })
+                print(f"✅ Model {model_id} already exists and is complete")
+            else:
+                # Model needs downloading
+                models_to_download.append(model)
+                print(f"📥 Model {model_id} needs downloading")
         
-        for i, model in enumerate(models):
+        if not models_to_download:
+            # All models already exist
+            download_status.update({
+                "is_downloading": False,
+                "progress": 100,
+                "current_model": "",
+                "status": "completed",
+                "message": "All models already downloaded!",
+                "error": None
+            })
+            print("All models already exist, no download needed")
+            return
+        
+        total_models = len(models_to_download)
+        
+        for i, model in enumerate(models_to_download):
             model_id = model["name"]
             model_info = download_status["models"][model_id]
             
@@ -540,14 +671,18 @@ def download_models_background():
             # Set model status to downloading
             download_status["models"][model_id]["status"] = "downloading"
             
-            # Simulate detailed progress for this model
-            total_size_mb = model_info["size_gb"] * 1024
-            downloaded_mb = 0
-            start_time = time.time()
+            print(f"🚀 Starting download of {model['name']}...")
+            
+            # Use Python script directly with proper virtual environment
+            venv_python = pathlib.Path(__file__).parent / "venv" / "bin" / "python"
+            if venv_python.exists():
+                python_cmd = str(venv_python)
+            else:
+                python_cmd = "python3"
             
             # Run download script for specific model
             result = subprocess.run(
-                [str(script_path), "--model", model["name"]],
+                [python_cmd, str(script_path), "--model", model["name"]],
                 capture_output=True,
                 text=True,
                 cwd=pathlib.Path(__file__).parent.parent
@@ -555,41 +690,14 @@ def download_models_background():
             
             if result.returncode != 0:
                 download_status["models"][model_id]["status"] = "error"
+                print(f"❌ Failed to download {model['name']}: {result.stderr}")
                 raise Exception(f"Failed to download {model['name']}: {result.stderr}")
             
-            # Simulate progress updates during download
-            while downloaded_mb < total_size_mb:
-                # Simulate download progress
-                elapsed_time = time.time() - start_time
-                if elapsed_time > 0:
-                    # Simulate varying download speeds (1-10 MB/s)
-                    speed_mbps = 2 + (downloaded_mb / total_size_mb) * 8
-                    downloaded_mb += speed_mbps * 0.1  # Update every 100ms
-                    
-                    if downloaded_mb > total_size_mb:
-                        downloaded_mb = total_size_mb
-                    
-                    progress = (downloaded_mb / total_size_mb) * 100
-                    remaining_mb = total_size_mb - downloaded_mb
-                    eta_seconds = remaining_mb / speed_mbps if speed_mbps > 0 else 0
-                    
-                    # Update model progress
-                    download_status["models"][model_id].update({
-                        "downloaded_mb": round(downloaded_mb, 1),
-                        "progress": round(progress, 1),
-                        "speed_mbps": round(speed_mbps, 1),
-                        "eta_seconds": round(eta_seconds, 0)
-                    })
-                    
-                    # Update overall progress
-                    overall_progress = ((i * 100) + progress) / total_models
-                    download_status["progress"] = round(overall_progress, 1)
-                
-                time.sleep(0.1)  # Update every 100ms
+            print(f"✅ Successfully downloaded {model['name']}")
             
             # Mark model as completed
             download_status["models"][model_id].update({
-                "downloaded_mb": total_size_mb,
+                "downloaded_mb": model_info["size_gb"] * 1024,
                 "progress": 100,
                 "speed_mbps": 0,
                 "eta_seconds": 0,
@@ -608,6 +716,14 @@ def download_models_background():
         
         # Models downloaded successfully - they will be loaded when requested
         print("Models downloaded successfully. Use the UI to load them when ready.")
+        
+        # Generate voice previews after successful download
+        try:
+            print("🎤 Generating voice previews...")
+            import asyncio
+            asyncio.create_task(generate_voice_previews())
+        except Exception as preview_error:
+            print(f"⚠️  Voice preview generation failed: {preview_error}")
         
     except Exception as e:
         download_status.update({
@@ -655,6 +771,78 @@ def restart_models():
         
     except Exception as e:
         print(f"Error restarting models: {e}")
+
+async def generate_voice_previews():
+    """Generate voice preview samples for each Bark voice"""
+    try:
+        print("🎤 Generating voice preview samples...")
+        
+        # Create voice previews directory
+        previews_dir = pathlib.Path('../outputs/voice-previews')
+        previews_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Sample texts for different voice types
+        voice_samples = {
+            "v2/en_speaker_0": "Hello! This is the default English speaker voice. Clear and natural.",
+            "v2/en_speaker_1": "Greetings! I'm an alternative English speaker with a distinct tone.",
+            "v2/en_speaker_2": "Hi there! This voice has a warm and friendly character.",
+            "v2/en_speaker_3": "Good day! This speaker has a professional and authoritative tone.",
+            "v2/en_speaker_4": "Hello! This voice is perfect for storytelling and narration.",
+            "v2/en_speaker_5": "Hey! This speaker has a casual and conversational style.",
+            "v2/en_speaker_6": "Hi! This is a female voice that's clear and engaging.",
+            "v2/en_speaker_7": "Hello! This is a male voice with depth and character.",
+            "v2/en_speaker_8": "Hi! This is a young, energetic voice perfect for children's content.",
+            "v2/en_speaker_9": "Welcome. This is a narrator voice, clear and authoritative."
+        }
+        
+        # Try to import Bark and generate previews
+        try:
+            import bark
+            from bark import generate_audio, SAMPLE_RATE
+            import soundfile as sf
+            import numpy as np
+            
+            print("✅ Bark imported successfully, generating voice previews...")
+            
+            for voice_id, sample_text in voice_samples.items():
+                try:
+                    print(f"🎵 Generating preview for {voice_id}...")
+                    
+                    # Generate audio with specific voice
+                    audio_array = generate_audio(sample_text, history_prompt=voice_id)
+                    
+                    # Save preview file
+                    preview_filename = f"{voice_id.replace('/', '_')}-preview.wav"
+                    preview_path = previews_dir / preview_filename
+                    
+                    # Ensure audio is in the right format
+                    if isinstance(audio_array, np.ndarray):
+                        sf.write(str(preview_path), audio_array, SAMPLE_RATE)
+                        print(f"✅ Generated preview: {preview_filename}")
+                    else:
+                        print(f"⚠️  Skipped {voice_id} - invalid audio format")
+                        
+                except Exception as e:
+                    print(f"⚠️  Could not generate preview for {voice_id}: {e}")
+                    continue
+            
+            print("🎉 Voice preview generation completed!")
+            
+        except ImportError:
+            print("⚠️  Bark not available for voice preview generation")
+            print("   Voice previews will be generated when Bark is properly installed")
+            
+    except Exception as e:
+        print(f"❌ Error generating voice previews: {e}")
+
+@app.post("/generate-voice-previews")
+async def generate_voice_previews_endpoint():
+    """Generate voice preview samples"""
+    try:
+        await generate_voice_previews()
+        return {"message": "Voice previews generated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate voice previews: {str(e)}")
 
 @app.delete("/job/{job_id}")
 async def cancel_job(job_id: str):
@@ -863,7 +1051,8 @@ async def generate_audio(job_id: str, request: GenerationRequest):
             model_name=request.model_name,
             sample_rate=request.sample_rate,
             output_format=request.output_format,
-            voice_style=request.voice_style
+            voice_style=request.voice_style,
+            voice_id=request.voice_id
         )
         
         job_queue.update_job(job_id, {

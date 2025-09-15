@@ -74,40 +74,69 @@ class ModelDownloader:
                 "repo": "suno/bark",
                 "path": "audio/bark",
                 "description": "Bark - High-quality text-to-speech and audio generation",
-                "size": "~4GB",
+                "size": "~5GB",
                 "type": "tts",
                 "features": ["Multiple voices", "Non-speech sounds", "Offline capable"],
                 "files": [
                     "pytorch_model.bin",
                     "config.json",
-                    "tokenizer"
+                    "tokenizer",
+                    "scheduler",
+                    "vae",
+                    "transformer"
+                ],
+                "voices": [
+                    "v2/en_speaker_0",  # Default English speaker
+                    "v2/en_speaker_1",  # Alternative English speaker
+                    "v2/en_speaker_2",  # Another English speaker
+                    "v2/en_speaker_3",  # Another English speaker
+                    "v2/en_speaker_4",  # Another English speaker
+                    "v2/en_speaker_5",  # Another English speaker
+                    "v2/en_speaker_6",  # Another English speaker
+                    "v2/en_speaker_7",  # Another English speaker
+                    "v2/en_speaker_8",  # Another English speaker
+                    "v2/en_speaker_9",  # Another English speaker
+                    "v2/en_speaker_6",  # Female voice
+                    "v2/en_speaker_7",  # Male voice
+                    "v2/en_speaker_8",  # Child voice
+                    "v2/en_speaker_9",  # Narrator voice
                 ]
             }
         }
     
     def check_dependencies(self) -> bool:
         """Check if required dependencies are installed"""
-        try:
-            import huggingface_hub
-            print("✅ huggingface_hub is installed")
-            return True
-        except ImportError:
-            print("❌ huggingface_hub is not installed")
-            print("Installing huggingface_hub...")
+        required_packages = ["huggingface_hub", "torch", "transformers"]
+        missing_packages = []
+        
+        for package in required_packages:
+            try:
+                __import__(package)
+                print(f"✅ {package} is installed")
+            except ImportError:
+                missing_packages.append(package)
+                print(f"❌ {package} is not installed")
+        
+        if missing_packages:
+            print(f"Installing missing packages: {', '.join(missing_packages)}...")
             try:
                 # Try to use the virtual environment if it exists
                 venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
                 if venv_python.exists():
                     print(f"Using virtual environment: {venv_python}")
-                    subprocess.check_call([str(venv_python), "-m", "pip", "install", "huggingface_hub"])
+                    for package in missing_packages:
+                        subprocess.check_call([str(venv_python), "-m", "pip", "install", package])
                 else:
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "huggingface_hub"])
-                print("✅ huggingface_hub installed successfully")
+                    for package in missing_packages:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", package])
+                print("✅ All required packages installed successfully")
                 return True
             except subprocess.CalledProcessError:
-                print("❌ Failed to install huggingface_hub")
-                print("Please install it manually: pip install huggingface_hub")
+                print("❌ Failed to install required packages")
+                print(f"Please install them manually: pip install {' '.join(missing_packages)}")
                 return False
+        
+        return True
     
     def download_model(self, model_type: str, model_name: str, force: bool = False) -> bool:
         """Download a specific model"""
@@ -124,8 +153,14 @@ class ModelDownloader:
         model_path = self.models_dir / model_config["path"]
         model_path.mkdir(parents=True, exist_ok=True)
         
-        # Check if model already exists
-        if model_path.exists() and any((model_path / file).exists() for file in model_config["files"]) and not force:
+        # Check if model already exists and has actual weight files
+        has_weights = False
+        if model_path.exists():
+            # Look for actual model weight files
+            weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
+            has_weights = len(weight_files) > 0
+        
+        if has_weights and not force:
             print(f"✅ Model {model_name} already exists at {model_path}")
             return True
         
@@ -137,6 +172,21 @@ class ModelDownloader:
         
         try:
             from huggingface_hub import snapshot_download
+            
+            # Special handling for Bark - ensure the Bark package is installed
+            if model_name == "bark":
+                print("🔧 Installing Bark package...")
+                try:
+                    import bark
+                    print("✅ Bark package already installed")
+                except ImportError:
+                    print("📦 Installing Bark package from GitHub...")
+                    venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
+                    if venv_python.exists():
+                        subprocess.check_call([str(venv_python), "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
+                    else:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
+                    print("✅ Bark package installed successfully")
             
             # Download the model
             downloaded_path = snapshot_download(
@@ -168,6 +218,11 @@ class ModelDownloader:
         print("\n🎵 Downloading audio models...")
         for model_name in self.audio_models:
             results[f"audio_{model_name}"] = self.download_model("audio", model_name, force)
+        
+        # Generate voice previews after downloading Bark
+        if "bark" in self.audio_models and results.get("audio_bark", False):
+            print("\n🎤 Generating voice previews...")
+            self.generate_voice_previews()
         
         return results
     
@@ -218,6 +273,69 @@ class ModelDownloader:
             model_config["type"] = "audio"  # Override the internal type
             return model_config
         return None
+    
+    def generate_voice_previews(self):
+        """Generate voice preview samples for each Bark voice"""
+        try:
+            print("🎤 Generating voice preview samples...")
+            
+            # Create voice previews directory
+            previews_dir = self.base_dir / "outputs" / "voice-previews"
+            previews_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Sample texts for different voice types
+            voice_samples = {
+                "v2/en_speaker_0": "Hello! This is the default English speaker voice. Clear and natural.",
+                "v2/en_speaker_1": "Greetings! I'm an alternative English speaker with a distinct tone.",
+                "v2/en_speaker_2": "Hi there! This voice has a warm and friendly character.",
+                "v2/en_speaker_3": "Good day! This speaker has a professional and authoritative tone.",
+                "v2/en_speaker_4": "Hello! This voice is perfect for storytelling and narration.",
+                "v2/en_speaker_5": "Hey! This speaker has a casual and conversational style.",
+                "v2/en_speaker_6": "Hi! This is a female voice that's clear and engaging.",
+                "v2/en_speaker_7": "Hello! This is a male voice with depth and character.",
+                "v2/en_speaker_8": "Hi! This is a young, energetic voice perfect for children's content.",
+                "v2/en_speaker_9": "Welcome. This is a narrator voice, clear and authoritative."
+            }
+            
+            # Try to import Bark and generate previews
+            try:
+                import bark
+                from bark import generate_audio, SAMPLE_RATE
+                import soundfile as sf
+                import numpy as np
+                
+                print("✅ Bark imported successfully, generating voice previews...")
+                
+                for voice_id, sample_text in voice_samples.items():
+                    try:
+                        print(f"🎵 Generating preview for {voice_id}...")
+                        
+                        # Generate audio with specific voice
+                        audio_array = generate_audio(sample_text, history_prompt=voice_id)
+                        
+                        # Save preview file
+                        preview_filename = f"{voice_id.replace('/', '_')}-preview.wav"
+                        preview_path = previews_dir / preview_filename
+                        
+                        # Ensure audio is in the right format
+                        if isinstance(audio_array, np.ndarray):
+                            sf.write(str(preview_path), audio_array, SAMPLE_RATE)
+                            print(f"✅ Generated preview: {preview_filename}")
+                        else:
+                            print(f"⚠️  Skipped {voice_id} - invalid audio format")
+                            
+                    except Exception as e:
+                        print(f"⚠️  Could not generate preview for {voice_id}: {e}")
+                        continue
+                
+                print("🎉 Voice preview generation completed!")
+                
+            except ImportError:
+                print("⚠️  Bark not available for voice preview generation")
+                print("   Voice previews will be generated when Bark is properly installed")
+                
+        except Exception as e:
+            print(f"❌ Error generating voice previews: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="Download model weights for Text-to-Media App")

@@ -25,13 +25,15 @@ export default function Page() {
   const [currentStep, setCurrentStep] = useState<'prompt' | 'progress' | 'results'>('prompt');
   const [settings, setSettings] = useState({
     format: 'wav',
-    voiceStyle: 'auto'
+    voiceStyle: 'auto',
+    voiceId: null as string | null
   });
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [voicePreviews, setVoicePreviews] = useState<{[key: string]: string}>({});
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
+  const [barkVoices, setBarkVoices] = useState<any[]>([]);
   const colors = useThemeColors();
 
   const fetchJobs = async () => {
@@ -92,7 +94,7 @@ export default function Page() {
       
       const previewMap: {[key: string]: string} = {};
       data.previews.forEach((preview: any) => {
-        previewMap[preview.voice_style] = `http://localhost:8000${preview.url}`;
+        previewMap[preview.voice_id] = `http://localhost:8000${preview.url}`;
       });
       
       setVoicePreviews(previewMap);
@@ -101,15 +103,25 @@ export default function Page() {
     }
   };
 
-  const playVoicePreview = async (voiceStyle: string) => {
-    if (playingPreview === voiceStyle) {
+  const fetchBarkVoices = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/bark-voices');
+      const data = await response.json();
+      setBarkVoices(data.voices);
+    } catch (error) {
+      console.error('Error fetching Bark voices:', error);
+    }
+  };
+
+  const playVoicePreview = async (voiceId: string) => {
+    if (playingPreview === voiceId) {
       setPlayingPreview(null);
       return;
     }
 
-    setPlayingPreview(voiceStyle);
-    
-    const audioUrl = voicePreviews[voiceStyle];
+    setPlayingPreview(voiceId);
+
+    const audioUrl = voicePreviews[voiceId];
     if (audioUrl) {
       const audio = new Audio(audioUrl);
       audio.onended = () => setPlayingPreview(null);
@@ -128,6 +140,7 @@ export default function Page() {
 
   useEffect(() => {
     fetchVoicePreviews();
+    fetchBarkVoices();
   }, []);
 
   const handleGenerate = async () => {
@@ -149,7 +162,8 @@ export default function Page() {
           model_name: 'bark',
           sample_rate: 22050, // Optimal for Bark
           output_format: settings.format,
-          voice_style: settings.voiceStyle
+          voice_style: settings.voiceStyle,
+          voice_id: settings.voiceId
         })
       });
       
@@ -467,6 +481,111 @@ export default function Page() {
                       </p>
                     </div>
 
+                    {/* Bark Voice Selection */}
+                    <div className="space-y-3">
+                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
+                        Specific Bark Voice
+                      </label>
+                      
+                      <div className="space-y-2">
+                        {/* Auto option */}
+                        <div
+                          className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                            !settings.voiceId
+                              ? 'border-accent-violet bg-accent-violet/10'
+                              : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 hover:border-accent-violet/50'
+                          }`}
+                          onClick={() => setSettings(prev => ({ ...prev, voiceId: null }))}
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-4 h-4 rounded-full border-2 ${
+                                !settings.voiceId
+                                  ? 'border-accent-violet bg-accent-violet'
+                                  : 'border-gray-300 dark:border-slate-500'
+                              }`}>
+                                {!settings.voiceId && (
+                                  <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                                )}
+                              </div>
+                              <div>
+                                <p className={`font-medium ${colors.text.primary}`}>
+                                  Auto Voice Selection
+                                </p>
+                                <p className={`text-xs ${colors.text.secondary}`}>
+                                  Let Bark choose the best voice automatically
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Specific Bark voices */}
+                        {barkVoices.map((voice) => (
+                          <div
+                            key={voice.id}
+                            className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
+                              settings.voiceId === voice.id
+                                ? 'border-accent-violet bg-accent-violet/10'
+                                : 'border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 hover:border-accent-violet/50'
+                            }`}
+                            onClick={() => setSettings(prev => ({ ...prev, voiceId: voice.id }))}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-4 h-4 rounded-full border-2 ${
+                                  settings.voiceId === voice.id
+                                    ? 'border-accent-violet bg-accent-violet'
+                                    : 'border-gray-300 dark:border-slate-500'
+                                }`}>
+                                  {settings.voiceId === voice.id && (
+                                    <div className="w-2 h-2 bg-white rounded-full m-0.5"></div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className={`font-medium ${colors.text.primary}`}>
+                                    {voice.name}
+                                  </p>
+                                  <p className={`text-xs ${colors.text.secondary}`}>
+                                    {voice.description}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Play Button */}
+                            {voicePreviews[voice.id] && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  playVoicePreview(voice.id);
+                                }}
+                                className={`ml-3 p-2 rounded-lg transition-all duration-200 ${
+                                  playingPreview === voice.id
+                                    ? 'bg-accent-violet text-white'
+                                    : 'bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-slate-300 hover:bg-accent-violet hover:text-white'
+                                }`}
+                                title={`Preview ${voice.name} voice`}
+                              >
+                                {playingPreview === voice.id ? (
+                                  <Pause className="h-4 w-4" />
+                                ) : (
+                                  <Play className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <p className={`text-xs ${colors.text.secondary} mt-2`}>
+                        {!settings.voiceId 
+                          ? 'Bark will automatically select the best voice based on your text content'
+                          : `Using specific Bark voice: ${barkVoices.find(v => v.id === settings.voiceId)?.name || settings.voiceId}`
+                        }
+                      </p>
+                    </div>
+
                     {/* Format Selection */}
                     <div className="space-y-3">
                       <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
@@ -561,6 +680,12 @@ export default function Page() {
                   </p>
                 </div>
                 <div>
+                  <span className="text-gray-500">Voice ID:</span>
+                  <p className="font-medium">
+                    {settings.voiceId ? barkVoices.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
+                  </p>
+                </div>
+                <div>
                   <span className="text-gray-500">Format:</span>
                   <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
                 </div>
@@ -646,6 +771,12 @@ export default function Page() {
                   <span className="text-gray-500">Voice Style:</span>
                   <p className="font-medium">
                     {currentResult.settings.voiceStyle === 'auto' ? 'Auto-detected' : currentResult.settings.voiceStyle}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Voice ID:</span>
+                  <p className="font-medium">
+                    {settings.voiceId ? barkVoices.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
                   </p>
                 </div>
                 <div>

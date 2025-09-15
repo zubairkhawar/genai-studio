@@ -167,8 +167,8 @@ export default function Page() {
                 console.error('Error loading models:', err);
               }
               
-            // Refresh models after download
-            await fetchModels();
+              // Refresh models after download
+              await fetchModels();
             } else if (downloadStatus.status === 'error') {
               clearInterval(pollInterval);
             }
@@ -560,10 +560,10 @@ export default function Page() {
                   <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Download Details</span>
                 </div>
                 <div className="space-y-1 text-xs text-blue-600 dark:text-blue-300">
-                  <p>• Stable Video Diffusion (~4GB) - For video generation</p>
+                  <p>• Stable Video Diffusion (~5GB) - For video generation</p>
                   <p>• Stable Diffusion (~4GB) - For image processing</p>
                   <p>• Bark (~5GB) - For audio generation</p>
-                  <p>• Total size: ~13GB</p>
+                  <p>• Total size: ~14GB</p>
                 </div>
               </div>
             </div>
@@ -606,7 +606,7 @@ export default function Page() {
               <p className={`text-sm ${colors.text.secondary} mt-1`}>
                 {models.video_models.length > 0 || models.audio_models.length > 0 
                   ? "Models are downloaded and ready to use. Delete them to free up space."
-                  : "Download Stable Video Diffusion, Stable Diffusion, and Bark models (~13GB total)"
+                  : "Download Stable Video Diffusion, Stable Diffusion, and Bark models (~14GB total)"
                 }
               </p>
             </div>
