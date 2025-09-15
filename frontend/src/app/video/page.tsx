@@ -22,6 +22,16 @@ export default function Page() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [results, setResults] = useState<GenerationResult[]>([]);
   const [currentStep, setCurrentStep] = useState<'prompt' | 'progress' | 'results'>('prompt');
+  const [settings, setSettings] = useState({
+    format: 'mp4'
+  });
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const colors = useThemeColors();
   
   // Check for existing job on mount
   useEffect(() => {
@@ -106,16 +116,6 @@ export default function Page() {
     const interval = setInterval(pollJobStatus, 2000);
     return () => clearInterval(interval);
   }, [currentJobId]);
-  const [settings, setSettings] = useState({
-    format: 'mp4'
-  });
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const colors = useThemeColors();
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
