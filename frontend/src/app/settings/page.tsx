@@ -49,7 +49,7 @@ export default function Page() {
   // Download state
   const [downloadStatus, setDownloadStatus] = useState<{
     is_downloading: boolean;
-    progress: number;
+    overall_progress: number;
     current_model: string;
     status: string;
     message: string;
@@ -57,17 +57,20 @@ export default function Page() {
     models?: {
       [key: string]: {
         name: string;
+        repo_id: string;
+        local_dir: string;
         size_gb: number;
-        downloaded_mb: number;
+        status: string;
         progress: number;
+        downloaded_mb: number;
         speed_mbps: number;
         eta_seconds: number;
-        status: string;
+        files_verified: boolean;
       };
     };
   }>({
     is_downloading: false,
-    progress: 0,
+    overall_progress: 0,
     current_model: "",
     status: "idle",
     message: "",
@@ -127,7 +130,7 @@ export default function Page() {
     // Clear any previous download status and show initial state
     setDownloadStatus({
       is_downloading: true,
-      progress: 0,
+      overall_progress: 0,
       current_model: '',
       status: 'downloading',
       message: 'Starting download...',
@@ -240,7 +243,7 @@ export default function Page() {
         
         setDownloadStatus({
           is_downloading: false,
-          progress: 0,
+          overall_progress: 0,
           current_model: "",
           status: "error",
           message: "Download failed",
@@ -250,7 +253,7 @@ export default function Page() {
     } catch (err: unknown) {
       setDownloadStatus({
         is_downloading: false,
-        progress: 0,
+        overall_progress: 0,
         current_model: "",
         status: "error",
         message: "Download failed",
@@ -475,7 +478,7 @@ export default function Page() {
                   <span className="font-medium text-accent-blue">Downloading Models...</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <span className="text-sm font-mono text-accent-blue">{downloadStatus.progress}%</span>
+                  <span className="text-sm font-mono text-accent-blue">{downloadStatus.overall_progress}%</span>
                   <button
                     onClick={async () => {
                       try {
@@ -484,7 +487,7 @@ export default function Page() {
                         });
                         setDownloadStatus({
                           is_downloading: false,
-                          progress: 0,
+                          overall_progress: 0,
                           current_model: "",
                           status: "idle",
                           message: "",
@@ -504,7 +507,7 @@ export default function Page() {
               <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 mb-3">
                 <div 
                   className="bg-accent-blue h-2 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${downloadStatus.progress}%` }}
+                  style={{ width: `${downloadStatus.overall_progress}%` }}
                 ></div>
               </div>
               
@@ -519,17 +522,22 @@ export default function Page() {
               {downloadStatus.models && (
                 <div className="mt-4 space-y-2">
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">Model Progress:</h4>
-                  {Object.values(downloadStatus.models).map((model: any, index: number) => (
-                    <div key={index} className="p-2 rounded-lg bg-gray-50 dark:bg-slate-800/50">
+                  {Object.entries(downloadStatus.models).map(([key, model]: [string, any]) => (
+                    <div key={key} className="p-2 rounded-lg bg-gray-50 dark:bg-slate-800/50">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{model.name}</span>
                         <div className="flex items-center space-x-2 text-xs text-gray-500">
-                          {model.speed_mbps > 0 && (
-                            <span>{model.speed_mbps.toFixed(1)} MB/s</span>
-                          )}
-                          {model.eta_seconds > 0 && (
-                            <span>ETA: {Math.floor(model.eta_seconds / 60)}:{(model.eta_seconds % 60).toFixed(0).padStart(2, '0')}</span>
-                          )}
+                          <span className={`px-2 py-1 rounded-full text-xs ${
+                            model.status === 'done' ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' :
+                            model.status === 'downloading' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400' :
+                            model.status === 'error' ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                          }`}>
+                            {model.status === 'done' ? '✅ Done' :
+                             model.status === 'downloading' ? '⬇️ Downloading' :
+                             model.status === 'error' ? '❌ Error' :
+                             '⏳ Pending'}
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between mb-1">
@@ -541,7 +549,7 @@ export default function Page() {
                       <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1">
                         <div 
                           className={`h-1 rounded-full transition-all duration-300 ${
-                            model.status === 'completed' ? 'bg-green-500' :
+                            model.status === 'done' ? 'bg-green-500' :
                             model.status === 'downloading' ? 'bg-accent-blue' :
                             model.status === 'error' ? 'bg-red-500' :
                             'bg-gray-400'
@@ -560,10 +568,11 @@ export default function Page() {
                   <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Download Details</span>
                 </div>
                 <div className="space-y-1 text-xs text-blue-600 dark:text-blue-300">
-                  <p>• Stable Video Diffusion (~5GB) - For video generation</p>
-                  <p>• Stable Diffusion (~4GB) - For image processing</p>
-                  <p>• Bark (~5GB) - For audio generation</p>
+                  <p>• Stable Diffusion (~4GB) - Text-to-image generation</p>
+                  <p>• Stable Video Diffusion (~5GB) - Image-to-video generation</p>
+                  <p>• Bark (~5GB) - Text-to-speech and audio generation</p>
                   <p>• Total size: ~14GB</p>
+                  <p>• Resume capability: Downloads can be resumed if interrupted</p>
                 </div>
               </div>
             </div>
@@ -606,7 +615,7 @@ export default function Page() {
               <p className={`text-sm ${colors.text.secondary} mt-1`}>
                 {models.video_models.length > 0 || models.audio_models.length > 0 
                   ? "Models are downloaded and ready to use. Delete them to free up space."
-                  : "Download Stable Video Diffusion, Stable Diffusion, and Bark models (~14GB total)"
+                  : "Download Stable Diffusion, Stable Video Diffusion, and Bark models (~14GB total) with resume capability"
                 }
               </p>
             </div>

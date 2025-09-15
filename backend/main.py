@@ -22,6 +22,8 @@ from utils.job_queue import JobQueue
 import subprocess
 import threading
 import time
+import os
+from huggingface_hub import snapshot_download
 
 app = FastAPI(title="Text-to-Media Generator", version="1.0.0")
 
@@ -46,41 +48,50 @@ job_queue = JobQueue()
 video_generator = None
 audio_generator = None
 
-# Download status tracking
+# Unified model download status tracking
 download_status = {
     "is_downloading": False,
-    "progress": 0,
+    "overall_progress": 0,
     "current_model": "",
     "status": "idle",  # idle, downloading, completed, error
     "message": "",
     "error": None,
     "models": {
-        "stable-video-diffusion": {
-            "name": "Stable Video Diffusion",
-            "size_gb": 5.0,
-            "downloaded_mb": 0,
-            "progress": 0,
-            "speed_mbps": 0,
-            "eta_seconds": 0,
-            "status": "pending"
-        },
-        "stable-diffusion": {
-            "name": "Stable Diffusion", 
+        "stable_diffusion": {
+            "name": "Stable Diffusion",
+            "repo_id": "runwayml/stable-diffusion-v1-5",
+            "local_dir": "../models/image/stable-diffusion",
             "size_gb": 4.0,
-            "downloaded_mb": 0,
+            "status": "pending",  # pending, downloading, done, error
             "progress": 0,
+            "downloaded_mb": 0,
             "speed_mbps": 0,
             "eta_seconds": 0,
-            "status": "pending"
+            "files_verified": False
+        },
+        "stable_video_diffusion": {
+            "name": "Stable Video Diffusion",
+            "repo_id": "stabilityai/stable-video-diffusion-img2vid", 
+            "local_dir": "../models/video/stable-video-diffusion",
+            "size_gb": 5.0,
+            "status": "pending",
+            "progress": 0,
+            "downloaded_mb": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "files_verified": False
         },
         "bark": {
             "name": "Bark",
+            "repo_id": "suno/bark",
+            "local_dir": "../models/audio/bark",
             "size_gb": 5.0,
-            "downloaded_mb": 0,
+            "status": "pending",
             "progress": 0,
+            "downloaded_mb": 0,
             "speed_mbps": 0,
             "eta_seconds": 0,
-            "status": "pending"
+            "files_verified": False
         }
     }
 }
@@ -107,6 +118,238 @@ class JobStatus(BaseModel):
     output_file: Optional[str] = None
     error: Optional[str] = None
 
+def check_existing_models():
+    """Check which models are already downloaded and update status"""
+    global download_status
+    
+    print("🔍 Checking existing models...")
+    
+    for model_key, model_info in download_status["models"].items():
+        local_dir = pathlib.Path(model_info["local_dir"])
+        
+        if local_dir.exists():
+            # Check for actual model weight files
+            weight_files = list(local_dir.rglob("*.safetensors")) + list(local_dir.rglob("*.bin")) + list(local_dir.rglob("*.pt")) + list(local_dir.rglob("*.pth"))
+            
+            if len(weight_files) > 0:
+                # Calculate total size
+                total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
+                size_mb = total_size / (1024 * 1024)
+                
+                download_status["models"][model_key].update({
+                    "status": "done",
+                    "progress": 100,
+                    "downloaded_mb": size_mb,
+                    "files_verified": True
+                })
+                print(f"✅ {model_info['name']} already downloaded ({size_mb:.1f} MB)")
+            else:
+                print(f"⚠️  {model_info['name']} directory exists but no model files found")
+        else:
+            print(f"❌ {model_info['name']} not found")
+    
+    # Update overall progress
+    completed_models = sum(1 for model in download_status["models"].values() if model["status"] == "done")
+    total_models = len(download_status["models"])
+    download_status["overall_progress"] = int((completed_models / total_models) * 100)
+    
+    if completed_models == total_models:
+        download_status["status"] = "completed"
+        print("🎉 All models are already downloaded!")
+    else:
+        print(f"📊 {completed_models}/{total_models} models downloaded ({download_status['overall_progress']}%)")
+
+def safe_snapshot_download(model_id: str, local_dir: str, model_key: str):
+    """Safely download a model with progress tracking"""
+    global download_status
+    
+    try:
+        print(f"📥 Starting download of {model_id}...")
+        download_status["models"][model_key]["status"] = "downloading"
+        download_status["current_model"] = model_key
+        download_status["message"] = f"Downloading {download_status['models'][model_key]['name']}..."
+        
+        # Create directory if it doesn't exist
+        os.makedirs(local_dir, exist_ok=True)
+        
+        # Download with resume capability
+        snapshot_download(
+            repo_id=model_id,
+            local_dir=local_dir,
+            resume_download=True,
+            local_dir_use_symlinks=False
+        )
+        
+        # Verify download
+        local_path = pathlib.Path(local_dir)
+        if not local_path.exists() or len(list(local_path.iterdir())) == 0:
+            raise Exception("No files found after download")
+        
+        # Calculate downloaded size
+        weight_files = list(local_path.rglob("*.safetensors")) + list(local_path.rglob("*.bin")) + list(local_path.rglob("*.pt")) + list(local_path.rglob("*.pth"))
+        total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
+        size_mb = total_size / (1024 * 1024)
+        
+        download_status["models"][model_key].update({
+            "status": "done",
+            "progress": 100,
+            "downloaded_mb": size_mb,
+            "files_verified": True
+        })
+        
+        print(f"✅ Successfully downloaded {model_id} ({size_mb:.1f} MB)")
+        
+    except Exception as e:
+        download_status["models"][model_key]["status"] = "error"
+        download_status["error"] = f"{model_key} failed: {str(e)}"
+        print(f"❌ Failed to download {model_id}: {e}")
+        raise e
+
+def download_bark_models():
+    """Download and setup Bark models"""
+    global download_status
+    
+    try:
+        print("🎵 Setting up Bark models...")
+        download_status["models"]["bark"]["status"] = "downloading"
+        download_status["current_model"] = "bark"
+        download_status["message"] = "Setting up Bark models..."
+        
+        # Try to import and preload Bark
+        try:
+            import bark
+            from bark import preload_models
+            
+            # Preload models (this downloads them to cache)
+            preload_models()
+            
+            # Check if Bark cache exists
+            bark_cache = pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
+            if bark_cache.exists():
+                # Calculate cache size
+                total_size = sum(f.stat().st_size for f in bark_cache.rglob("*") if f.is_file())
+                size_mb = total_size / (1024 * 1024)
+                
+                download_status["models"]["bark"].update({
+                    "status": "done",
+                    "progress": 100,
+                    "downloaded_mb": size_mb,
+                    "files_verified": True
+                })
+                print(f"✅ Bark models ready ({size_mb:.1f} MB)")
+            else:
+                raise Exception("Bark cache not found after preload")
+                
+        except ImportError:
+            # Fallback: download Bark repository
+            print("📦 Bark package not found, downloading repository...")
+            safe_snapshot_download("suno/bark", "../models/audio/bark", "bark")
+            
+    except Exception as e:
+        download_status["models"]["bark"]["status"] = "error"
+        download_status["error"] = f"Bark setup failed: {str(e)}"
+        print(f"❌ Bark setup failed: {e}")
+        raise e
+
+def download_all_models_background():
+    """Background thread to download all models sequentially"""
+    global download_status
+    
+    try:
+        print("🚀 Starting unified model download...")
+        download_status.update({
+            "is_downloading": True,
+            "status": "downloading",
+            "overall_progress": 0,
+            "error": None
+        })
+        
+        # Reset all model statuses
+        for model_key in download_status["models"]:
+            if download_status["models"][model_key]["status"] != "done":
+                download_status["models"][model_key].update({
+                    "status": "pending",
+                    "progress": 0,
+                    "downloaded_mb": 0,
+                    "files_verified": False
+                })
+        
+        # Download models sequentially
+        models_to_download = []
+        for model_key, model_info in download_status["models"].items():
+            if model_info["status"] != "done":
+                models_to_download.append((model_key, model_info))
+        
+        if not models_to_download:
+            print("✅ All models already downloaded!")
+            download_status.update({
+                "is_downloading": False,
+                "status": "completed",
+                "overall_progress": 100,
+                "message": "All models already downloaded!"
+            })
+            return
+        
+        total_models = len(models_to_download)
+        
+        for i, (model_key, model_info) in enumerate(models_to_download):
+            try:
+                if model_key == "bark":
+                    download_bark_models()
+                else:
+                    safe_snapshot_download(
+                        model_info["repo_id"],
+                        model_info["local_dir"],
+                        model_key
+                    )
+                
+                # Update overall progress
+                completed = i + 1
+                download_status["overall_progress"] = int((completed / total_models) * 100)
+                
+            except Exception as e:
+                print(f"❌ Failed to download {model_key}: {e}")
+                download_status["models"][model_key]["status"] = "error"
+                download_status["error"] = f"{model_key} download failed: {str(e)}"
+                break
+        
+        # Check if all downloads completed successfully
+        all_done = all(model["status"] == "done" for model in download_status["models"].values())
+        
+        if all_done:
+            download_status.update({
+                "is_downloading": False,
+                "status": "completed",
+                "overall_progress": 100,
+                "message": "All models downloaded successfully!",
+                "current_model": ""
+            })
+            
+            # Generate voice previews after successful download
+            try:
+                print("🎤 Generating voice previews...")
+                import asyncio
+                asyncio.create_task(generate_voice_previews())
+            except Exception as preview_error:
+                print(f"⚠️  Voice preview generation failed: {preview_error}")
+                
+            print("🎉 All models downloaded successfully!")
+        else:
+            download_status.update({
+                "is_downloading": False,
+                "status": "error",
+                "message": "Some models failed to download"
+            })
+            
+    except Exception as e:
+        download_status.update({
+            "is_downloading": False,
+            "status": "error",
+            "message": f"Download failed: {str(e)}",
+            "error": str(e)
+        })
+        print(f"❌ Download process failed: {e}")
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application on startup"""
@@ -122,6 +365,9 @@ async def startup_event():
     
     print("Backend started successfully. Models will be loaded when requested.")
     print("Use the 'Download Models' button in the UI to download and load models.")
+    
+    # Check existing models on startup
+    check_existing_models()
 
 @app.get("/")
 async def root():
@@ -536,7 +782,7 @@ async def cleanup_download_status():
     
     download_status.update({
         "is_downloading": False,
-        "progress": 0,
+        "overall_progress": 0,
         "current_model": "",
         "status": "idle",
         "message": "",
@@ -550,188 +796,26 @@ async def cleanup_download_status():
             "progress": 0,
             "speed_mbps": 0,
             "eta_seconds": 0,
-            "status": "pending"
+            "status": "pending",
+            "files_verified": False
         })
     
     return {"message": "Download status cleaned up successfully"}
 
 @app.post("/download-models")
 async def download_models(background_tasks: BackgroundTasks):
-    """Start downloading all models"""
+    """Start downloading all models using unified downloader"""
     global download_status
     
     if download_status["is_downloading"]:
         raise HTTPException(status_code=400, detail="Download already in progress")
     
-    # Reset status
-    download_status.update({
-        "is_downloading": True,
-        "progress": 0,
-        "current_model": "",
-        "status": "downloading",
-        "message": "Starting model download...",
-        "error": None
-    })
+    # Start download in background thread
+    download_thread = threading.Thread(target=download_all_models_background, daemon=True)
+    download_thread.start()
     
-    # Reset model statuses
-    for model_id in download_status["models"]:
-        download_status["models"][model_id].update({
-            "downloaded_mb": 0,
-            "progress": 0,
-            "speed_mbps": 0,
-            "eta_seconds": 0,
-            "status": "pending"
-        })
-    
-    # Start download in background
-    background_tasks.add_task(download_models_background)
-    
-    return {"message": "Model download started", "status": "downloading"}
+    return {"message": "Unified model download started", "status": "downloading"}
 
-def download_models_background():
-    """Background task to download models"""
-    global download_status
-    
-    try:
-        # Get the Python script path (prefer Python script over shell script)
-        script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
-        
-        if not script_path.exists():
-            raise Exception("Download script not found")
-        
-        # Models to download
-        models = [
-            {"name": "stable-video-diffusion", "type": "video"},
-            {"name": "stable-diffusion", "type": "image"}, 
-            {"name": "bark", "type": "audio"}
-        ]
-        
-        # Check which models actually need downloading
-        models_to_download = []
-        for model in models:
-            model_id = model["name"]
-            model_info = download_status["models"][model_id]
-            
-            # Check if model already exists and is complete
-            if model["type"] == "video":
-                model_path = pathlib.Path(f"../models/video/{model_id}")
-            elif model["type"] == "image":
-                model_path = pathlib.Path(f"../models/image/{model_id}")
-            elif model["type"] == "audio":
-                model_path = pathlib.Path(f"../models/audio/{model_id}")
-            
-            # Check if model has actual weight files (not just config)
-            has_weights = False
-            if model_path.exists():
-                # Look for actual model weight files
-                weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
-                has_weights = len(weight_files) > 0
-            
-            if has_weights:
-                # Model already exists and is complete
-                download_status["models"][model_id].update({
-                    "downloaded_mb": model_info["size_gb"] * 1024,
-                    "progress": 100,
-                    "speed_mbps": 0,
-                    "eta_seconds": 0,
-                    "status": "completed"
-                })
-                print(f"✅ Model {model_id} already exists and is complete")
-            else:
-                # Model needs downloading
-                models_to_download.append(model)
-                print(f"📥 Model {model_id} needs downloading")
-        
-        if not models_to_download:
-            # All models already exist
-            download_status.update({
-                "is_downloading": False,
-                "progress": 100,
-                "current_model": "",
-                "status": "completed",
-                "message": "All models already downloaded!",
-                "error": None
-            })
-            print("All models already exist, no download needed")
-            return
-        
-        total_models = len(models_to_download)
-        
-        for i, model in enumerate(models_to_download):
-            model_id = model["name"]
-            model_info = download_status["models"][model_id]
-            
-            # Update current model status
-            download_status.update({
-                "current_model": model["name"],
-                "message": f"Downloading {model['name']}...",
-                "progress": int((i / total_models) * 100)
-            })
-            
-            # Set model status to downloading
-            download_status["models"][model_id]["status"] = "downloading"
-            
-            print(f"🚀 Starting download of {model['name']}...")
-            
-            # Use Python script directly with proper virtual environment
-            venv_python = pathlib.Path(__file__).parent / "venv" / "bin" / "python"
-            if venv_python.exists():
-                python_cmd = str(venv_python)
-            else:
-                python_cmd = "python3"
-            
-            # Run download script for specific model
-            result = subprocess.run(
-                [python_cmd, str(script_path), "--model", model["name"]],
-                capture_output=True,
-                text=True,
-                cwd=pathlib.Path(__file__).parent.parent
-            )
-            
-            if result.returncode != 0:
-                download_status["models"][model_id]["status"] = "error"
-                print(f"❌ Failed to download {model['name']}: {result.stderr}")
-                raise Exception(f"Failed to download {model['name']}: {result.stderr}")
-            
-            print(f"✅ Successfully downloaded {model['name']}")
-            
-            # Mark model as completed
-            download_status["models"][model_id].update({
-                "downloaded_mb": model_info["size_gb"] * 1024,
-                "progress": 100,
-                "speed_mbps": 0,
-                "eta_seconds": 0,
-                "status": "completed"
-            })
-        
-        # Download completed
-        download_status.update({
-            "is_downloading": False,
-            "progress": 100,
-            "current_model": "",
-            "status": "completed",
-            "message": "All models downloaded successfully!",
-            "error": None
-        })
-        
-        # Models downloaded successfully - they will be loaded when requested
-        print("Models downloaded successfully. Use the UI to load them when ready.")
-        
-        # Generate voice previews after successful download
-        try:
-            print("🎤 Generating voice previews...")
-            import asyncio
-            asyncio.create_task(generate_voice_previews())
-        except Exception as preview_error:
-            print(f"⚠️  Voice preview generation failed: {preview_error}")
-        
-    except Exception as e:
-        download_status.update({
-            "is_downloading": False,
-            "status": "error",
-            "message": f"Download failed: {str(e)}",
-            "error": str(e)
-        })
 
 @app.post("/load-models")
 async def load_models():
