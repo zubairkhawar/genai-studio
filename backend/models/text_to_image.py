@@ -25,9 +25,9 @@ class TextToImageGenerator:
         
         # Configuration for SVD compatibility
         self.config = {
-            "width": 384,  # Reduced for memory efficiency
-            "height": 384,  # Reduced for memory efficiency
-            "num_inference_steps": 20,  # Keep for quality
+            "width": 256,  # Further reduced for memory efficiency
+            "height": 256,  # Further reduced for memory efficiency
+            "num_inference_steps": 15,  # Reduced for speed
             "guidance_scale": 7.5,
             "scheduler": "DPMSolverMultistepScheduler"
         }
