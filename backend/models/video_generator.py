@@ -36,6 +36,19 @@ class VideoGenerator:
                     "High quality output",
                     "Local-first inference"
                 ]
+            },
+            "stable-diffusion": {
+                "name": "Stable Diffusion",
+                "description": "Text-to-image model used for video generation pipeline",
+                "max_duration": 0,
+                "resolution": "512x512",
+                "type": "text2img",
+                "workflow": False,
+                "features": [
+                    "Text-to-image generation",
+                    "High quality images",
+                    "Local-first inference"
+                ]
             }
         }
     
@@ -107,7 +120,12 @@ class VideoGenerator:
         available = []
         for model_id, info in self.available_models.items():
             # Check if model files exist on disk
-            model_path = pathlib.Path(f"../models/video/{model_id}")
+            # Stable Diffusion is in image directory, SVD is in video directory
+            if model_id == "stable-diffusion":
+                model_path = pathlib.Path(f"../models/image/{model_id}")
+            else:
+                model_path = pathlib.Path(f"../models/video/{model_id}")
+                
             if model_path.exists():
                 # Check for actual model weight files (not just config files)
                 weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))

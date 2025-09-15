@@ -83,7 +83,13 @@ class ModelDownloader:
                     "tokenizer",
                     "scheduler",
                     "vae",
-                    "transformer"
+                    "transformer",
+                    "text_2.pt",
+                    "text_2.pt.safetensors",
+                    "coarse_2.pt",
+                    "coarse_2.pt.safetensors",
+                    "fine_2.pt",
+                    "fine_2.pt.safetensors"
                 ],
                 "voices": [
                     "v2/en_speaker_0",  # Default English speaker
@@ -173,34 +179,50 @@ class ModelDownloader:
         try:
             from huggingface_hub import snapshot_download
             
-            # Special handling for Bark - ensure the Bark package is installed
+            # Special handling for Bark - use preload_models() to download all files
             if model_name == "bark":
-                print("🔧 Installing Bark package...")
-                try:
-                    import bark
-                    print("✅ Bark package already installed")
-                except ImportError:
-                    print("📦 Installing Bark package from GitHub...")
-                    venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
-                    if venv_python.exists():
-                        subprocess.check_call([str(venv_python), "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
-                    else:
-                        subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
-                    print("✅ Bark package installed successfully")
-            
-            # Download the model
-            downloaded_path = snapshot_download(
-                repo_id=model_config["repo"],
-                local_dir=str(model_path),
-                local_dir_use_symlinks=False,  # Use actual files, not symlinks
-                resume_download=True
-            )
+                return self._download_bark_model(model_path)
+            else:
+                # Download the model
+                downloaded_path = snapshot_download(
+                    repo_id=model_config["repo"],
+                    local_dir=str(model_path),
+                    local_dir_use_symlinks=False,  # Use actual files, not symlinks
+                    resume_download=True
+                )
             
             print(f"✅ Successfully downloaded {model_name} to {downloaded_path}")
             return True
             
         except Exception as e:
             print(f"❌ Failed to download {model_name}: {e}")
+            return False
+    
+    def _download_bark_model(self, model_path: Path) -> bool:
+        """Download Bark model using preload_models() to get all required files"""
+        try:
+            print("🔧 Installing Bark package...")
+            try:
+                import bark
+                print("✅ Bark package already installed")
+            except ImportError:
+                print("📦 Installing Bark package from GitHub...")
+                venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
+                if venv_python.exists():
+                    subprocess.check_call([str(venv_python), "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
+                else:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
+                print("✅ Bark package installed successfully")
+            
+            print("📥 Preloading Bark models (this downloads all required files)...")
+            import bark
+            bark.preload_models()
+            
+            print("✅ Successfully downloaded all Bark model files")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to download Bark model: {e}")
             return False
     
     def download_all_models(self, force: bool = False) -> Dict[str, bool]:
