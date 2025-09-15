@@ -11,6 +11,7 @@ interface GenerationResult {
   progress: number;
   outputFile?: string;
   error?: string;
+  message?: string;
   createdAt: string;
   settings: {
     format: string;
@@ -93,7 +94,8 @@ export default function Page() {
                            currentJob.status === 'processing' ? 'processing' : 'queued',
                     progress: currentJob.progress || 0,
                     outputFile: currentJob.output_file,
-                    error: currentJob.error
+                    error: currentJob.error,
+                    message: currentJob.message
                   }
                 : result
             ));
@@ -698,6 +700,9 @@ export default function Page() {
                 ></div>
               </div>
               <p className="text-lg font-medium">{currentResult.progress}% complete</p>
+              {currentResult.message && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">{currentResult.message}</p>
+              )}
             </div>
 
             {/* Settings Display */}
