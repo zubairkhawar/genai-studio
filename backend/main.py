@@ -1170,26 +1170,35 @@ async def clear_outputs():
 async def generate_video(job_id: str, request: GenerationRequest):
     """Generate video in background"""
     try:
-        job_queue.update_job(job_id, {"status": "processing", "progress": 10})
+        job_queue.update_job(job_id, {"status": "processing", "progress": 5})
         
-        # Generate video
+        # Update progress: Loading model
+        job_queue.update_job(job_id, {"progress": 15, "message": "Loading video model..."})
+        
+        # Generate video with progress callbacks
+        def progress_callback(progress: int, message: str = ""):
+            job_queue.update_job(job_id, {"progress": progress, "message": message})
+        
         output_path = await video_generator.generate(
             prompt=request.prompt,
             model_name=request.model_name,
             duration=request.duration,
-            output_format=request.output_format
+            output_format=request.output_format,
+            progress_callback=progress_callback
         )
         
         job_queue.update_job(job_id, {
             "status": "completed",
             "progress": 100,
-            "output_file": output_path
+            "output_file": output_path,
+            "message": "Video generation completed!"
         })
         
     except Exception as e:
         job_queue.update_job(job_id, {
             "status": "failed",
-            "error": str(e)
+            "error": str(e),
+            "message": f"Video generation failed: {str(e)}"
         })
 
 async def generate_audio(job_id: str, request: GenerationRequest):

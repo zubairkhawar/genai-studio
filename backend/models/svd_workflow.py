@@ -184,6 +184,7 @@ class SVDWorkflow:
         num_frames: Optional[int] = None,
         num_inference_steps: Optional[int] = None,
         guidance_scale: Optional[float] = None,
+        min_guidance_scale: Optional[float] = None,
         motion_bucket_id: Optional[int] = None,
         noise_aug_strength: Optional[float] = None,
         seed: Optional[int] = None
@@ -197,7 +198,8 @@ class SVDWorkflow:
             # Prepare parameters
             num_frames = num_frames or self.config["num_frames"]
             num_inference_steps = num_inference_steps or self.config["num_inference_steps"]
-            guidance_scale = guidance_scale or self.config["guidance_scale"]
+            # Handle both guidance_scale and min_guidance_scale parameters
+            final_guidance_scale = min_guidance_scale or guidance_scale or self.config["guidance_scale"]
             motion_bucket_id = motion_bucket_id or self.config["motion_bucket_id"]
             noise_aug_strength = noise_aug_strength or self.config["noise_aug_strength"]
             
@@ -221,7 +223,7 @@ class SVDWorkflow:
                 decode_chunk_size=self.config["decode_chunk_size"],
                 num_frames=num_frames,
                 num_inference_steps=num_inference_steps,
-                min_guidance_scale=guidance_scale,
+                min_guidance_scale=final_guidance_scale,
                 motion_bucket_id=motion_bucket_id,
                 noise_aug_strength=noise_aug_strength,
                 generator=torch.Generator(device=self.device).manual_seed(seed or 42)
