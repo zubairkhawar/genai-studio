@@ -31,18 +31,18 @@ class SVDWorkflow:
         
         # Workflow parameters (from the ComfyUI workflow)
         self.config = {
-            "width": 1024,
-            "height": 576,
-            "num_frames": 25,
-            "num_inference_steps": 12,
+            "width": 512,  # Reduced for memory efficiency
+            "height": 288,  # Reduced for memory efficiency
+            "num_frames": 12,  # Reduced for memory efficiency
+            "num_inference_steps": 8,  # Reduced for speed
             "guidance_scale": 2.0,
             "min_guidance_scale": 0.02,
             "motion_bucket_id": 100,
             "noise_aug_strength": 0.02,
-            "decode_chunk_size": 8,
+            "decode_chunk_size": 4,  # Reduced for memory efficiency
             "frame_rate": 20,
-            "interpolation_factor": 2,  # RIFE interpolation
-            "freeu_enabled": True,
+            "interpolation_factor": 1,  # Disabled interpolation for memory efficiency
+            "freeu_enabled": False,  # Disabled for memory efficiency
             "freeu_params": {
                 "b1": 1.3,
                 "b2": 1.4,
