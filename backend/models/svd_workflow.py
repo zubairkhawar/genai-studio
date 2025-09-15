@@ -66,15 +66,19 @@ class SVDWorkflow:
                     model_path,
                     torch_dtype=self.dtype,
                     variant="fp16" if self.dtype == torch.float16 else None,
-                    local_files_only=True
+                    local_files_only=True,
+                    low_cpu_mem_usage=True,
+                    use_safetensors=True
                 )
             else:
                 # Fallback to Hugging Face
                 logger.info("Loading SVD from Hugging Face...")
                 self.pipeline = StableVideoDiffusionPipeline.from_pretrained(
-                    "stabilityai/stable-video-diffusion",
+                    "stabilityai/stable-video-diffusion-img2vid-xt",
                     torch_dtype=self.dtype,
-                    variant="fp16" if self.dtype == torch.float16 else None
+                    variant="fp16" if self.dtype == torch.float16 else None,
+                    low_cpu_mem_usage=True,
+                    use_safetensors=True
                 )
             
             # Move to device and enable optimizations
