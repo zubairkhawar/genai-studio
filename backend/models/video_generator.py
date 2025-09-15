@@ -199,13 +199,13 @@ class VideoGenerator:
     def _create_svd_input_image(self, prompt: str) -> Image.Image:
         """Create an input image for SVD based on the prompt"""
         # Create a more sophisticated placeholder image
-        image = Image.new('RGB', (256, 256), color='white')
+        image = Image.new('RGB', (224, 224), color='white')
         draw = ImageDraw.Draw(image)
         
         # Add gradient background
-        for y in range(256):
-            color_value = int(255 * (1 - y / 256))
-            draw.line([(0, y), (256, y)], fill=(color_value, color_value, 255))
+        for y in range(224):
+            color_value = int(255 * (1 - y / 224))
+            draw.line([(0, y), (224, y)], fill=(color_value, color_value, 255))
         
         # Add text overlay
         try:
@@ -231,7 +231,7 @@ class VideoGenerator:
         This enables end-to-end flow without heavy model weights.
         """
         try:
-            width, height = 256, 256
+            width, height = 224, 224
             fps = 6
             num_frames = max(6, min(duration * fps, 60))
             frames: List[Image.Image] = []
