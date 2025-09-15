@@ -11,6 +11,7 @@ interface Job {
   progress: number;
   output_file?: string;
   error?: string;
+  message?: string;
   created_at: string;
   updated_at: string;
   prompt?: string;

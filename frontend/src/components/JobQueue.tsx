@@ -20,6 +20,7 @@ interface Job {
   progress: number;
   output_file?: string;
   error?: string;
+  message?: string;
   created_at: string;
   updated_at: string;
   prompt?: string;
@@ -39,7 +40,20 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
 
   const filteredJobs = jobs.filter(job => {
     if (filter === 'all') return true;
-    return job.status === filter;
+    
+    // Map backend statuses to frontend filters
+    switch (filter) {
+      case 'pending':
+        return job.status === 'queued' || job.status === 'pending';
+      case 'running':
+        return job.status === 'processing' || job.status === 'running';
+      case 'completed':
+        return job.status === 'completed';
+      case 'failed':
+        return job.status === 'failed';
+      default:
+        return job.status === filter;
+    }
   });
 
   const getStatusIcon = (status: string) => {
@@ -206,14 +220,19 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                           {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
                         </span>
                         {job.progress > 0 && (job.status === 'processing' || job.status === 'running') && (
-                          <div className="flex items-center space-x-3">
-                            <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                              <div 
-                                className="bg-gradient-to-r from-accent-blue to-accent-violet h-2 rounded-full transition-all duration-500 shadow-lg"
-                                style={{ width: `${job.progress}%` }}
-                              ></div>
+                          <div className="flex flex-col space-y-2">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className="bg-gradient-to-r from-accent-blue to-accent-violet h-2 rounded-full transition-all duration-500 shadow-lg"
+                                  style={{ width: `${job.progress}%` }}
+                                ></div>
+                              </div>
+                              <span className={`text-sm font-bold text-gray-900 dark:text-slate-100`}>{job.progress}%</span>
                             </div>
-                            <span className={`text-sm font-bold text-gray-900 dark:text-slate-100`}>{job.progress}%</span>
+                            {job.message && (
+                              <p className="text-xs text-gray-600 dark:text-gray-400 italic">{job.message}</p>
+                            )}
                           </div>
                         )}
                       </div>
