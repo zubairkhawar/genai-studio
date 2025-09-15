@@ -31,15 +31,15 @@ class SVDWorkflow:
         
         # Workflow parameters (from the ComfyUI workflow)
         self.config = {
-            "width": 256,  # Further reduced for memory efficiency
-            "height": 144,  # Further reduced for memory efficiency
-            "num_frames": 8,  # Further reduced for memory efficiency
-            "num_inference_steps": 6,  # Further reduced for speed
+            "width": 1024,  # Restored to full quality
+            "height": 576,  # Restored to full quality
+            "num_frames": 25,  # Restored to full quality
+            "num_inference_steps": 12,  # Restored for quality
             "guidance_scale": 2.0,
             "min_guidance_scale": 0.02,
             "motion_bucket_id": 100,
             "noise_aug_strength": 0.02,
-            "decode_chunk_size": 2,  # Further reduced for memory efficiency
+            "decode_chunk_size": 8,  # Restored for quality
             "frame_rate": 20,
             "interpolation_factor": 1,  # Disabled interpolation for memory efficiency
             "freeu_enabled": False,  # Disabled for memory efficiency
@@ -81,13 +81,25 @@ class SVDWorkflow:
                     use_safetensors=True
                 )
             
-            # Move to device and enable optimizations
+            # Move to device and enable Apple Silicon optimizations
             self.pipeline = self.pipeline.to(self.device)
-            self.pipeline.enable_model_cpu_offload()
             
-            # Enable memory efficient attention if available
-            if hasattr(self.pipeline, 'enable_attention_slicing'):
+            # Enable Apple Silicon MPS optimizations
+            if self.device == "mps":
+                logger.info("Enabling Apple Silicon MPS optimizations...")
                 self.pipeline.enable_attention_slicing()
+                # Enable memory efficient attention for MPS
+                if hasattr(self.pipeline, 'enable_memory_efficient_attention'):
+                    self.pipeline.enable_memory_efficient_attention()
+                # Enable CPU offload for additional memory savings
+                self.pipeline.enable_model_cpu_offload()
+                logger.info("✅ Apple Silicon MPS optimizations enabled")
+            else:
+                # Standard optimizations for other devices
+                self.pipeline.enable_model_cpu_offload()
+                # Enable attention slicing for other devices too
+                if hasattr(self.pipeline, 'enable_attention_slicing'):
+                    self.pipeline.enable_attention_slicing()
             
             # Enable VAE slicing for memory efficiency
             if hasattr(self.pipeline, 'enable_vae_slicing'):

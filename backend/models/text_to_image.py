@@ -25,9 +25,9 @@ class TextToImageGenerator:
         
         # Configuration for SVD compatibility
         self.config = {
-            "width": 256,  # Reduced for memory efficiency
-            "height": 144,  # Reduced for memory efficiency
-            "num_inference_steps": 15,  # Reduced for speed
+            "width": 1024,  # Restored to full quality
+            "height": 576,  # Restored to full quality
+            "num_inference_steps": 20,  # Restored for quality
             "guidance_scale": 7.5,
             "scheduler": "DPMSolverMultistepScheduler"
         }
@@ -68,9 +68,21 @@ class TextToImageGenerator:
                 self.pipeline.scheduler.config
             )
             
-            # Enable memory optimizations
-            if hasattr(self.pipeline, 'enable_attention_slicing'):
+            # Enable Apple Silicon MPS optimizations
+            if self.device == "mps":
+                logger.info("Enabling Apple Silicon MPS optimizations for text-to-image...")
                 self.pipeline.enable_attention_slicing()
+                # Enable memory efficient attention for MPS
+                if hasattr(self.pipeline, 'enable_memory_efficient_attention'):
+                    self.pipeline.enable_memory_efficient_attention()
+                # Enable CPU offload for additional memory savings
+                self.pipeline.enable_model_cpu_offload()
+                logger.info("✅ Apple Silicon MPS optimizations enabled for text-to-image")
+            else:
+                # Standard optimizations for other devices
+                if hasattr(self.pipeline, 'enable_attention_slicing'):
+                    self.pipeline.enable_attention_slicing()
+                self.pipeline.enable_model_cpu_offload()
             
             if hasattr(self.pipeline, 'enable_vae_slicing'):
                 self.pipeline.enable_vae_slicing()

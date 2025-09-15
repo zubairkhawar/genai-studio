@@ -29,14 +29,14 @@ class TextToVideoPipeline:
         # Pipeline configuration - Optimized for SVD
         self.config = {
             "image_generation": {
-                "width": 256,  # Further reduced for memory efficiency
-                "height": 144,  # Further reduced for memory efficiency
-                "num_inference_steps": 15,  # Reduced for speed
+                "width": 1024,  # Restored to full quality
+                "height": 576,  # Restored to full quality
+                "num_inference_steps": 20,  # Restored for quality
                 "guidance_scale": 7.5
             },
             "video_generation": {
-                "num_frames": 8,  # Further reduced for memory efficiency
-                "num_inference_steps": 6,  # Further reduced for speed
+                "num_frames": 25,  # Restored to full quality
+                "num_inference_steps": 12,  # Restored for quality
                 "guidance_scale": 2.0,
                 "motion_bucket_id": 100,
                 "noise_aug_strength": 0.02
@@ -108,7 +108,7 @@ class TextToVideoPipeline:
             video_path = await self.svd_workflow.generate_video(
                 image_input=image,
                 prompt=prompt,
-                num_frames=min(video_duration * 2, 8),  # 2 fps, max 8 frames
+                num_frames=min(video_duration * 5, 25),  # 5 fps, max 25 frames
                 num_inference_steps=self.config["video_generation"]["num_inference_steps"],
                 guidance_scale=self.config["video_generation"]["guidance_scale"],
                 motion_bucket_id=self.config["video_generation"]["motion_bucket_id"],
@@ -142,7 +142,7 @@ class TextToVideoPipeline:
             video_path = await self.svd_workflow.generate_video(
                 image_input=image_input,
                 prompt=prompt,
-                num_frames=min(video_duration * 2, 8),  # 2 fps, max 8 frames
+                num_frames=min(video_duration * 5, 25),  # 5 fps, max 25 frames
                 num_inference_steps=self.config["video_generation"]["num_inference_steps"],
                 guidance_scale=self.config["video_generation"]["guidance_scale"],
                 motion_bucket_id=self.config["video_generation"]["motion_bucket_id"],
