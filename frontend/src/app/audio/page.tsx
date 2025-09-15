@@ -106,10 +106,16 @@ export default function Page() {
   const fetchBarkVoices = async () => {
     try {
       const response = await fetch('http://localhost:8000/bark-voices');
-      const data = await response.json();
-      setBarkVoices(data.voices);
+      if (response.ok) {
+        const data = await response.json();
+        setBarkVoices(data.voices || []);
+      } else {
+        console.error('Failed to fetch Bark voices:', response.status);
+        setBarkVoices([]);
+      }
     } catch (error) {
       console.error('Error fetching Bark voices:', error);
+      setBarkVoices([]);
     }
   };
 
@@ -521,7 +527,7 @@ export default function Page() {
                         </div>
 
                         {/* Specific Bark voices */}
-                        {barkVoices.map((voice) => (
+                        {barkVoices && barkVoices.length > 0 ? barkVoices.map((voice) => (
                           <div
                             key={voice.id}
                             className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all duration-200 cursor-pointer ${
@@ -575,13 +581,22 @@ export default function Page() {
                               </button>
                             )}
                           </div>
-                        ))}
+                        )) : (
+                          <div className="p-4 rounded-lg bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600">
+                            <div className="flex items-center space-x-2">
+                              <Loader2 className="h-4 w-4 animate-spin text-accent-violet" />
+                              <span className="text-sm text-gray-600 dark:text-slate-300">
+                                Loading Bark voices...
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
                       <p className={`text-xs ${colors.text.secondary} mt-2`}>
                         {!settings.voiceId 
                           ? 'Bark will automatically select the best voice based on your text content'
-                          : `Using specific Bark voice: ${barkVoices.find(v => v.id === settings.voiceId)?.name || settings.voiceId}`
+                          : `Using specific Bark voice: ${barkVoices?.find(v => v.id === settings.voiceId)?.name || settings.voiceId}`
                         }
                       </p>
                     </div>
@@ -682,7 +697,7 @@ export default function Page() {
                 <div>
                   <span className="text-gray-500">Voice ID:</span>
                   <p className="font-medium">
-                    {settings.voiceId ? barkVoices.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
+                    {settings.voiceId ? barkVoices?.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
                   </p>
                 </div>
                 <div>
@@ -776,7 +791,7 @@ export default function Page() {
                 <div>
                   <span className="text-gray-500">Voice ID:</span>
                   <p className="font-medium">
-                    {settings.voiceId ? barkVoices.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
+                    {settings.voiceId ? barkVoices?.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
                   </p>
                 </div>
                 <div>
