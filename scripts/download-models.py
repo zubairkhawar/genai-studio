@@ -126,13 +126,19 @@ class ModelDownloader:
         if missing_packages:
             print(f"Installing missing packages: {', '.join(missing_packages)}...")
             try:
-                # Try to use the virtual environment if it exists
-                venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
-                if venv_python.exists():
+                # ✅ Cross-platform virtual environment detection
+                venv_python = None
+                if os.name == 'nt':  # Windows
+                    venv_python = Path(__file__).parent.parent / "backend" / "venv" / "Scripts" / "python.exe"
+                else:  # Unix-like (Mac/Linux)
+                    venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
+                
+                if venv_python and venv_python.exists():
                     print(f"Using virtual environment: {venv_python}")
                     for package in missing_packages:
                         subprocess.check_call([str(venv_python), "-m", "pip", "install", package])
                 else:
+                    print("Virtual environment not found, installing to user directory...")
                     for package in missing_packages:
                         subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", package])
                 print("✅ All required packages installed successfully")
@@ -178,17 +184,20 @@ class ModelDownloader:
         
         try:
             from huggingface_hub import snapshot_download
+            from tqdm.auto import tqdm
             
             # Special handling for Bark - use preload_models() to download all files
             if model_name == "bark":
                 return self._download_bark_model(model_path)
             else:
-                # Download the model
+                # Download the model with progress bar
+                print(f"📥 Downloading {model_name} from {model_config['repo']}...")
                 downloaded_path = snapshot_download(
                     repo_id=model_config["repo"],
                     local_dir=str(model_path),
                     local_dir_use_symlinks=False,  # Use actual files, not symlinks
-                    resume_download=True
+                    resume_download=True,
+                    tqdm_class=tqdm  # ✅ Shows download progress bar
                 )
             
             print(f"✅ Successfully downloaded {model_name} to {downloaded_path}")
@@ -199,7 +208,7 @@ class ModelDownloader:
             return False
     
     def _download_bark_model(self, model_path: Path) -> bool:
-        """Download Bark model using preload_models() to get all required files"""
+        """Download Bark model using preload_models() to get all required files and voices"""
         try:
             print("🔧 Installing Bark package...")
             try:
@@ -207,8 +216,14 @@ class ModelDownloader:
                 print("✅ Bark package already installed")
             except ImportError:
                 print("📦 Installing Bark package from GitHub...")
-                venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
-                if venv_python.exists():
+                # ✅ Cross-platform virtual environment detection
+                venv_python = None
+                if os.name == 'nt':  # Windows
+                    venv_python = Path(__file__).parent.parent / "backend" / "venv" / "Scripts" / "python.exe"
+                else:  # Unix-like (Mac/Linux)
+                    venv_python = Path(__file__).parent.parent / "backend" / "venv" / "bin" / "python"
+                
+                if venv_python and venv_python.exists():
                     subprocess.check_call([str(venv_python), "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
                 else:
                     subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/suno-ai/bark.git"])
@@ -218,7 +233,25 @@ class ModelDownloader:
             import bark
             bark.preload_models()
             
-            print("✅ Successfully downloaded all Bark model files")
+            # ✅ Extra: Ensure voices are cached locally
+            print("🎤 Downloading voice prompts for offline use...")
+            try:
+                from bark.generation import download_model
+                bark_config = self.audio_models["bark"]
+                if "voices" in bark_config:
+                    for voice in bark_config["voices"]:
+                        try:
+                            print(f"   Downloading voice: {voice}")
+                            download_model(voice)
+                        except Exception as voice_error:
+                            print(f"⚠️  Could not download voice {voice}: {voice_error}")
+                            print("   Continuing with other voices...")
+            except ImportError:
+                print("⚠️  Could not import bark.generation.download_model, skipping voice downloads")
+            except Exception as e:
+                print(f"⚠️  Error downloading voices: {e}")
+            
+            print("✅ Successfully downloaded all Bark model files & voices")
             return True
             
         except Exception as e:
@@ -267,7 +300,7 @@ class ModelDownloader:
             print(f"   {name}: {config['description']} ({config['size']}) - {status}")
     
     def _is_model_downloaded(self, model_type: str, model_name: str) -> bool:
-        """Check if a model is already downloaded"""
+        """Check if a model is already downloaded with all required files"""
         if model_type == "video" and model_name in self.video_models:
             model_config = self.video_models[model_name]
         elif model_type == "image" and model_name in self.image_models:
@@ -278,7 +311,19 @@ class ModelDownloader:
             return False
         
         model_path = self.models_dir / model_config["path"]
-        return model_path.exists() and any((model_path / file).exists() for file in model_config["files"])
+        if not model_path.exists():
+            return False
+        
+        # ✅ Ensure ALL required files exist (not just any one file)
+        for required_file in model_config["files"]:
+            # Use rglob to find files that match the pattern (handles subdirectories)
+            matching_files = list(model_path.rglob(required_file))
+            if not matching_files:
+                print(f"⚠️  Missing required file: {required_file} for {model_name}")
+                return False
+        
+        print(f"✅ All required files present for {model_name}")
+        return True
     
     def get_model_info(self, model_name: str) -> Optional[Dict]:
         """Get information about a specific model"""

@@ -144,9 +144,23 @@ def check_existing_models():
                 })
                 print(f"✅ {model_info['name']} already downloaded ({size_mb:.1f} MB)")
             else:
-                print(f"⚠️  {model_info['name']} directory exists but no model files found")
+                # Directory exists but no model files - mark as pending
+                download_status["models"][model_key].update({
+                    "status": "pending",
+                    "progress": 0,
+                    "downloaded_mb": 0,
+                    "files_verified": False
+                })
+                print(f"⚠️  {model_info['name']} directory exists but no model files found - will re-download")
         else:
-            print(f"❌ {model_info['name']} not found")
+            # Directory doesn't exist - mark as pending
+            download_status["models"][model_key].update({
+                "status": "pending",
+                "progress": 0,
+                "downloaded_mb": 0,
+                "files_verified": False
+            })
+            print(f"❌ {model_info['name']} not found - will download")
     
     # Update overall progress
     completed_models = sum(1 for model in download_status["models"].values() if model["status"] == "done")
@@ -264,21 +278,22 @@ def download_all_models_background():
             "error": None
         })
         
-        # Reset all model statuses
+        # First, check existing models to get accurate status
+        check_existing_models()
+        
+        # Reset all model statuses to pending for re-download
         for model_key in download_status["models"]:
-            if download_status["models"][model_key]["status"] != "done":
-                download_status["models"][model_key].update({
-                    "status": "pending",
-                    "progress": 0,
-                    "downloaded_mb": 0,
-                    "files_verified": False
-                })
+            download_status["models"][model_key].update({
+                "status": "pending",
+                "progress": 0,
+                "downloaded_mb": 0,
+                "files_verified": False
+            })
         
         # Download models sequentially
         models_to_download = []
         for model_key, model_info in download_status["models"].items():
-            if model_info["status"] != "done":
-                models_to_download.append((model_key, model_info))
+            models_to_download.append((model_key, model_info))
         
         if not models_to_download:
             print("✅ All models already downloaded!")
@@ -802,19 +817,61 @@ async def cleanup_download_status():
     
     return {"message": "Download status cleaned up successfully"}
 
+@app.post("/optimize-models")
+async def optimize_models():
+    """Optimize models by removing duplicates and keeping only fp16 versions"""
+    try:
+        import subprocess
+        import sys
+        
+        # Run the optimization script
+        result = subprocess.run([
+            sys.executable, 
+            "scripts/optimize-models.py"
+        ], capture_output=True, text=True, cwd="..")
+        
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": "Models optimized successfully",
+                "output": result.stdout
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Optimization failed",
+                "error": result.stderr
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Optimization error: {str(e)}"
+        }
+
 @app.post("/download-models")
-async def download_models(background_tasks: BackgroundTasks):
+async def download_models(background_tasks: BackgroundTasks, force: bool = False):
     """Start downloading all models using unified downloader"""
     global download_status
     
     if download_status["is_downloading"]:
         raise HTTPException(status_code=400, detail="Download already in progress")
     
+    # If force is True, reset all model statuses to pending
+    if force:
+        print("🔄 Force re-download requested - resetting all model statuses")
+        for model_key in download_status["models"]:
+            download_status["models"][model_key].update({
+                "status": "pending",
+                "progress": 0,
+                "downloaded_mb": 0,
+                "files_verified": False
+            })
+    
     # Start download in background thread
     download_thread = threading.Thread(target=download_all_models_background, daemon=True)
     download_thread.start()
     
-    return {"message": "Unified model download started", "status": "downloading"}
+    return {"message": "Unified model download started", "status": "downloading", "force": force}
 
 
 @app.post("/load-models")

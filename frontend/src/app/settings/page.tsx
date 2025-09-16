@@ -118,7 +118,30 @@ export default function Page() {
     }
   };
 
-  const startDownload = async () => {
+  const optimizeModels = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/optimize-models', {
+        method: 'POST',
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert('Models optimized successfully! Check console for details.');
+        console.log('Optimization output:', result.output);
+        // Refresh models list
+        fetchModels();
+      } else {
+        alert(`Optimization failed: ${result.message}`);
+        console.error('Optimization error:', result.error);
+      }
+    } catch (error) {
+      console.error('Error optimizing models:', error);
+      alert('Error optimizing models. Check console for details.');
+    }
+  };
+
+  const startDownload = async (force = false) => {
     // First, cleanup any existing download state
     try {
       await fetch('http://localhost:8000/download-cleanup', {
@@ -134,12 +157,12 @@ export default function Page() {
       overall_progress: 0,
       current_model: '',
       status: 'downloading',
-      message: 'Starting download...',
+      message: force ? 'Force re-downloading all models...' : 'Starting download...',
       error: null
     });
     
     try {
-      const response = await fetch('http://localhost:8000/download-models', {
+      const response = await fetch(`http://localhost:8000/download-models?force=${force}`, {
         method: 'POST',
       });
       
@@ -196,8 +219,8 @@ export default function Page() {
             // Wait a moment for cleanup to complete
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Retry the download
-            const retryResponse = await fetch('http://localhost:8000/download-models', {
+            // Retry the download with force
+            const retryResponse = await fetch('http://localhost:8000/download-models?force=true', {
               method: 'POST',
             });
             
@@ -637,17 +660,51 @@ export default function Page() {
                 </div>
               </button>
               ) : (
-              /* Show download button if no models are downloaded */
-              <button
-                onClick={startDownload}
-                className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30"
-              >
-                <div className="flex items-center space-x-2">
-                  <CloudDownload className="h-4 w-4" />
-                  <span>Download Models</span>
-                </div>
-              </button>
+              /* Show download buttons if no models are downloaded */
+              <div className="flex flex-col space-y-2">
+                <button
+                  onClick={() => startDownload(false)}
+                  className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30"
+                >
+                  <div className="flex items-center space-x-2">
+                    <CloudDownload className="h-4 w-4" />
+                    <span>Download Models</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => startDownload(true)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 bg-accent-violet/10 text-accent-violet hover:bg-accent-violet/20 border border-accent-violet/30"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RefreshCw className="h-3 w-3" />
+                    <span>Force Re-download</span>
+                  </div>
+                </button>
+              </div>
               )}
+              
+              {/* Optimization button - show if models are downloaded */}
+              {models.video_models.length > 0 || models.audio_models.length > 0 ? (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Model Optimization
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Remove duplicate files and keep only fp16 versions to reduce storage from 70+ GB to ~20-25 GB
+                  </p>
+                  <button
+                    onClick={optimizeModels}
+                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 dark:text-green-400"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-4 w-4" />
+                      <span>Optimize Models</span>
+                    </div>
+                  </button>
+                </div>
+              ) : null}
           </div>
         </div>
       </div>
