@@ -183,14 +183,14 @@ export default function Page() {
                   message: data.message,
                   is_downloading: false
                 }));
-                
-                // Load models after download completion
-                try {
-                  const loadResponse = await fetch('http://localhost:8000/load-models', {
-                    method: 'POST',
-                  });
-                  if (loadResponse.ok) {
-                    console.log('Models loaded successfully');
+              
+              // Load models after download completion
+              try {
+                const loadResponse = await fetch('http://localhost:8000/load-models', {
+                  method: 'POST',
+                });
+                if (loadResponse.ok) {
+                  console.log('Models loaded successfully');
                   }
                 } catch (loadError) {
                   console.error('Failed to load models:', loadError);
@@ -480,12 +480,12 @@ export default function Page() {
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm">{model.name}</span>
                           <div className="flex items-center space-x-2">
-                            <div className={`px-2 py-1 rounded-full text-xs ${
-                              model.loaded 
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                            }`}>
-                              {model.loaded ? 'Loaded' : 'Available'}
+                          <div className={`px-2 py-1 rounded-full text-xs ${
+                            model.loaded 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
+                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                          }`}>
+                            {model.loaded ? 'Loaded' : 'Available'}
                             </div>
                             {model.loaded && (
                               <button
@@ -503,12 +503,6 @@ export default function Page() {
                             <div className="flex items-center space-x-1">
                               <HardDrive className="h-3 w-3" />
                               <span>{model.size_gb}GB</span>
-                            </div>
-                          )}
-                          {model.resolution && (
-                            <div className="flex items-center space-x-1">
-                              <FileText className="h-3 w-3" />
-                              <span>{model.resolution}</span>
                             </div>
                           )}
                         </div>
@@ -529,12 +523,12 @@ export default function Page() {
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm">{model.name}</span>
                           <div className="flex items-center space-x-2">
-                            <div className={`px-2 py-1 rounded-full text-xs ${
-                              model.loaded 
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                            }`}>
-                              {model.loaded ? 'Loaded' : 'Available'}
+                          <div className={`px-2 py-1 rounded-full text-xs ${
+                            model.loaded 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
+                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                          }`}>
+                            {model.loaded ? 'Loaded' : 'Available'}
                             </div>
                             {model.loaded && (
                               <button
@@ -552,12 +546,6 @@ export default function Page() {
                             <div className="flex items-center space-x-1">
                               <HardDrive className="h-3 w-3" />
                               <span>{model.size_gb}GB</span>
-                            </div>
-                          )}
-                          {model.sample_rate && (
-                            <div className="flex items-center space-x-1">
-                              <FileText className="h-3 w-3" />
-                              <span>{model.sample_rate}Hz</span>
                             </div>
                           )}
                         </div>
@@ -744,15 +732,15 @@ export default function Page() {
               ) : (
               /* Show download buttons if no models are downloaded */
               <div className="flex flex-col space-y-2">
-                <button
+              <button
                   onClick={() => startDownload(false)}
-                  className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30"
-                >
-                  <div className="flex items-center space-x-2">
-                    <CloudDownload className="h-4 w-4" />
-                    <span>Download Models</span>
-                  </div>
-                </button>
+                className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30"
+              >
+                <div className="flex items-center space-x-2">
+                  <CloudDownload className="h-4 w-4" />
+                  <span>Download Models</span>
+                </div>
+              </button>
                 <button
                   onClick={() => startDownload(true)}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 bg-accent-violet/10 text-accent-violet hover:bg-accent-violet/20 border border-accent-violet/30"
