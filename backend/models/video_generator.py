@@ -130,12 +130,17 @@ class VideoGenerator:
                 # Check for actual model weight files (not just config files)
                 weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
                 if len(weight_files) > 0:
+                    # Calculate total model size
+                    total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
+                    size_gb = total_size / (1024 * 1024 * 1024)
+                    
                     available.append({
                         "id": model_id,
                         "name": info["name"],
                         "description": info["description"],
                         "max_duration": info["max_duration"],
                         "resolution": info["resolution"],
+                        "size_gb": round(size_gb, 2),
                         "loaded": model_id in self.models
                     })
         return available

@@ -11,6 +11,7 @@ interface Model {
   max_duration: number;
   resolution?: string;
   sample_rate?: number;
+  size_gb?: number;
   loaded: boolean;
 }
 
@@ -404,10 +405,12 @@ export default function Page() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-4 text-xs text-gray-500">
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3" />
-                            <span>Max: {model.max_duration}s</span>
-                          </div>
+                          {model.size_gb && model.size_gb > 0 && (
+                            <div className="flex items-center space-x-1">
+                              <HardDrive className="h-3 w-3" />
+                              <span>{model.size_gb}GB</span>
+                            </div>
+                          )}
                           {model.resolution && (
                             <div className="flex items-center space-x-1">
                               <FileText className="h-3 w-3" />
@@ -440,10 +443,12 @@ export default function Page() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-4 text-xs text-gray-500">
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3" />
-                            <span>Max: {model.max_duration}s</span>
-                          </div>
+                          {model.size_gb && model.size_gb > 0 && (
+                            <div className="flex items-center space-x-1">
+                              <HardDrive className="h-3 w-3" />
+                              <span>{model.size_gb}GB</span>
+                            </div>
+                          )}
                           {model.sample_rate && (
                             <div className="flex items-center space-x-1">
                               <FileText className="h-3 w-3" />
