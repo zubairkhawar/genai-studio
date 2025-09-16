@@ -573,10 +573,10 @@ export default function Page() {
                   <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Download Details</span>
                 </div>
                 <div className="space-y-1 text-xs text-blue-600 dark:text-blue-300">
-                  <p>• Stable Diffusion (~4GB) - Text-to-image generation</p>
-                  <p>• Stable Video Diffusion (~5GB) - Image-to-video generation</p>
+                  <p>• Stable Diffusion (~44GB) - Text-to-image generation</p>
+                  <p>• Stable Video Diffusion (~30GB) - Image-to-video generation</p>
                   <p>• Bark (~5GB) - Text-to-speech and audio generation</p>
-                  <p>• Total size: ~14GB</p>
+                  <p>• Total size: ~79GB</p>
                   <p>• Resume capability: Downloads can be resumed if interrupted</p>
                 </div>
               </div>
@@ -620,7 +620,7 @@ export default function Page() {
               <p className={`text-sm ${colors.text.secondary} mt-1`}>
                 {models.video_models.length > 0 || models.audio_models.length > 0 
                   ? "Models are downloaded and ready to use. Delete them to free up space."
-                  : "Download Stable Diffusion, Stable Video Diffusion, and Bark models (~14GB total) with resume capability"
+                  : "Download Stable Diffusion, Stable Video Diffusion, and Bark models (~79GB total) with resume capability"
                 }
               </p>
             </div>

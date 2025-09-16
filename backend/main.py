@@ -61,7 +61,7 @@ download_status = {
             "name": "Stable Diffusion",
             "repo_id": "runwayml/stable-diffusion-v1-5",
             "local_dir": "../models/image/stable-diffusion",
-            "size_gb": 4.0,
+            "size_gb": 44.0,
             "status": "pending",  # pending, downloading, done, error
             "progress": 0,
             "downloaded_mb": 0,
@@ -73,7 +73,7 @@ download_status = {
             "name": "Stable Video Diffusion",
             "repo_id": "stabilityai/stable-video-diffusion-img2vid", 
             "local_dir": "../models/video/stable-video-diffusion",
-            "size_gb": 5.0,
+            "size_gb": 30.0,
             "status": "pending",
             "progress": 0,
             "downloaded_mb": 0,
