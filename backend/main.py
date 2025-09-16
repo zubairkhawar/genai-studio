@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import uvicorn
 import os
 import json
@@ -12,6 +12,9 @@ from datetime import datetime
 import time
 import uuid
 import pathlib
+import queue
+import subprocess
+import threading
 
 from models.video_generator import VideoGenerator
 from models.audio_generator import AudioGenerator
@@ -891,6 +894,106 @@ async def load_models():
         return {"message": "Models loaded successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load models: {str(e)}")
+
+@app.get("/download-models-stream")
+async def download_models_stream(force: bool = False):
+    """Stream download progress in real-time"""
+    
+    def generate_download_logs():
+        """Generator function that yields download logs in real-time"""
+        try:
+            # Prepare the download command
+            script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
+            cmd = [sys.executable, str(script_path), "--all"]
+            
+            if force:
+                cmd.append("--force")
+            
+            # Start the download process
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
+            
+            # Stream output line by line
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    # Format as Server-Sent Events
+                    yield f"data: {json.dumps({'type': 'log', 'message': line.strip()})}\n\n"
+            
+            # Wait for process to complete
+            process.wait()
+            
+            if process.returncode == 0:
+                yield f"data: {json.dumps({'type': 'success', 'message': 'Download completed successfully!'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Download failed with exit code {process.returncode}'})}\n\n"
+                
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Download error: {str(e)}'})}\n\n"
+    
+    return StreamingResponse(
+        generate_download_logs(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
+
+@app.get("/download-model-stream/{model_name}")
+async def download_model_stream(model_name: str, force: bool = False):
+    """Stream download progress for a specific model"""
+    
+    def generate_model_download_logs():
+        """Generator function that yields model download logs in real-time"""
+        try:
+            # Prepare the download command
+            script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
+            cmd = [sys.executable, str(script_path), "--model", model_name]
+            
+            if force:
+                cmd.append("--force")
+            
+            # Start the download process
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
+            
+            # Stream output line by line
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    # Format as Server-Sent Events
+                    yield f"data: {json.dumps({'type': 'log', 'message': line.strip()})}\n\n"
+            
+            # Wait for process to complete
+            process.wait()
+            
+            if process.returncode == 0:
+                yield f"data: {json.dumps({'type': 'success', 'message': f'{model_name} download completed successfully!'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'{model_name} download failed with exit code {process.returncode}'})}\n\n"
+                
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'{model_name} download error: {str(e)}'})}\n\n"
+    
+    return StreamingResponse(
+        generate_model_download_logs(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream"
+        }
+    )
 
 def restart_models():
     """Restart model loading after download"""

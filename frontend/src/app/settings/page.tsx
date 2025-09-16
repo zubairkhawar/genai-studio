@@ -162,127 +162,177 @@ export default function Page() {
     });
     
     try {
-      const response = await fetch(`http://localhost:8000/download-models?force=${force}`, {
-        method: 'POST',
-      });
+      // Use streaming endpoint for real-time progress
+      const response = await fetch(`http://localhost:8000/download-models-stream?force=${force}`);
       
-      if (response.ok) {
-        // Start polling for download status
-        const pollInterval = setInterval(async () => {
-          try {
-            const response = await fetch('http://localhost:8000/download-status');
-            const downloadStatus = await response.json();
-            
-            // Update download status
-            setDownloadStatus(downloadStatus);
-          
-          // Stop polling if download is complete or error
-            if (downloadStatus.status === 'completed') {
-            clearInterval(pollInterval);
-              
-              // Load models after download completion
-              try {
-                const loadResponse = await fetch('http://localhost:8000/load-models', {
-                  method: 'POST',
-                });
-                if (loadResponse.ok) {
-                  console.log('Models loaded successfully');
-                } else {
-                  console.error('Failed to load models');
-                }
-              } catch (err) {
-                console.error('Error loading models:', err);
-              }
-              
-              // Refresh models after download
-              await fetchModels();
-            } else if (downloadStatus.status === 'error') {
-              clearInterval(pollInterval);
-            }
-          } catch (pollError) {
-            console.error('Error polling download status:', pollError);
-          }
-        }, 1000);
-      } else {
-        const errorData = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+      
+      // Process streaming data
+      while (true) {
+        const { done, value } = await reader.read();
         
-        // If it's a "Download already in progress" error, try to cleanup and retry
-        if (response.status === 400 && errorData.detail?.includes("already in progress")) {
-          console.log("Download already in progress, cleaning up and retrying...");
-          
-          // Cleanup and retry once
-          try {
-            await fetch('http://localhost:8000/download-cleanup', {
-              method: 'POST',
-            });
-            
-            // Wait a moment for cleanup to complete
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Retry the download with force
-            const retryResponse = await fetch('http://localhost:8000/download-models?force=true', {
-              method: 'POST',
-            });
-            
-            if (retryResponse.ok) {
-              // Start polling for the retry
-              const pollInterval = setInterval(async () => {
-                try {
-                  const response = await fetch('http://localhost:8000/download-status');
-                  const downloadStatus = await response.json();
-                  
-                  setDownloadStatus(downloadStatus);
-                  
-                  if (downloadStatus.status === 'completed') {
-                    clearInterval(pollInterval);
-                    
-                    try {
-                      const loadResponse = await fetch('http://localhost:8000/load-models', {
-                        method: 'POST',
-                      });
-                      if (loadResponse.ok) {
-                        console.log('Models loaded successfully');
-                      } else {
-                        console.error('Failed to load models');
-                      }
-                    } catch (err) {
-                      console.error('Error loading models:', err);
-                    }
-                    
-                    await fetchModels();
-                  } else if (downloadStatus.status === 'error') {
-                    clearInterval(pollInterval);
-                  }
-                } catch (pollError) {
-                  console.error('Error polling download status:', pollError);
-                }
-              }, 1000);
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
               
-              return; // Exit early since we're handling the retry
+              if (data.type === 'log') {
+                // Update message with log content
+                setDownloadStatus(prev => ({
+                  ...prev,
+                  message: data.message
+                }));
+                console.log('Download log:', data.message);
+              } else if (data.type === 'success') {
+                // Download completed successfully
+                setDownloadStatus(prev => ({
+                  ...prev,
+                  status: 'completed',
+                  message: data.message,
+                  is_downloading: false
+                }));
+                
+                // Load models after download completion
+                try {
+                  const loadResponse = await fetch('http://localhost:8000/load-models', {
+                    method: 'POST',
+                  });
+                  if (loadResponse.ok) {
+                    console.log('Models loaded successfully');
+                  }
+                } catch (loadError) {
+                  console.error('Failed to load models:', loadError);
+                }
+                
+                // Refresh models list
+                fetchModels();
+                break;
+              } else if (data.type === 'error') {
+                // Download failed
+                setDownloadStatus(prev => ({
+                  ...prev,
+                  status: 'error',
+                  error: data.message,
+                  is_downloading: false
+                }));
+                break;
+              }
+            } catch (parseError) {
+              console.error('Error parsing streaming data:', parseError);
             }
-          } catch (retryError) {
-            console.error('Retry failed:', retryError);
           }
         }
-        
-        setDownloadStatus({
-          is_downloading: false,
-          overall_progress: 0,
-          current_model: "",
-          status: "error",
-          message: "Download failed",
-          error: errorData.detail || 'Failed to start download'
-        });
       }
-    } catch (err: unknown) {
-      setDownloadStatus({
-        is_downloading: false,
-        overall_progress: 0,
-        current_model: "",
-        status: "error",
-        message: "Download failed",
-        error: err instanceof Error ? err.message : 'Network error occurred'
-      });
+      
+    } catch (error) {
+      console.error('Error starting download:', error);
+      setDownloadStatus(prev => ({
+        ...prev,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        is_downloading: false
+      }));
+    }
+  };
+
+  const downloadModel = async (modelName: string, force = false) => {
+    // Clear any previous download status and show initial state
+    setDownloadStatus({
+      is_downloading: true,
+      overall_progress: 0,
+      current_model: modelName,
+      status: 'downloading',
+      message: force ? `Force re-downloading ${modelName}...` : `Starting ${modelName} download...`,
+      error: null
+    });
+    
+    try {
+      // Use streaming endpoint for real-time progress
+      const response = await fetch(`http://localhost:8000/download-model-stream/${modelName}?force=${force}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+      
+      // Process streaming data
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'log') {
+                // Update message with log content
+                setDownloadStatus(prev => ({
+                  ...prev,
+                  message: data.message
+                }));
+                console.log('Download log:', data.message);
+              } else if (data.type === 'success') {
+                // Download completed successfully
+                setDownloadStatus(prev => ({
+                  ...prev,
+                  status: 'completed',
+                  message: data.message,
+                  is_downloading: false
+                }));
+                
+                // Refresh models list
+                fetchModels();
+                break;
+              } else if (data.type === 'error') {
+                // Download failed
+                setDownloadStatus(prev => ({
+                  ...prev,
+                  status: 'error',
+                  error: data.message,
+                  is_downloading: false
+                }));
+                break;
+              }
+            } catch (parseError) {
+              console.error('Error parsing streaming data:', parseError);
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error starting download:', error);
+      setDownloadStatus(prev => ({
+        ...prev,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        is_downloading: false
+      }));
     }
   };
 
