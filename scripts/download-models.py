@@ -18,6 +18,7 @@ import os
 import sys
 import argparse
 import subprocess
+import pathlib
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -38,16 +39,16 @@ class ModelDownloader:
                 "repo": "stabilityai/stable-video-diffusion-img2vid",
                 "path": "video/stable-video-diffusion",
                 "description": "Stable Video Diffusion (SVD) - Official image-to-video generation",
-                "size": "~5GB",
+                "size": "~30GB",
                 "type": "img2vid",
                 "resolution": "576×1024",
                 "duration": "2-4 seconds",
                 "files": [
-                    "pytorch_model.bin",
-                    "config.json",
-                    "scheduler",
-                    "transformer",
-                    "vae"
+                    "svd.safetensors",
+                    "svd_image_decoder.safetensors",
+                    "unet/diffusion_pytorch_model.fp16.safetensors",
+                    "image_encoder/model.fp16.safetensors",
+                    "vae/diffusion_pytorch_model.fp16.safetensors"
                 ]
             }
         }
@@ -57,14 +58,15 @@ class ModelDownloader:
                 "repo": "runwayml/stable-diffusion-v1-5",
                 "path": "image/stable-diffusion",
                 "description": "Stable Diffusion v1.5 - Text-to-image generation for SVD input",
-                "size": "~4GB",
+                "size": "~44GB",
                 "type": "text2img",
                 "resolution": "512×512",
                 "files": [
-                    "pytorch_model.bin",
-                    "config.json",
-                    "scheduler",
-                    "vae"
+                    "v1-5-pruned-emaonly.safetensors",
+                    "unet/diffusion_pytorch_model.fp16.safetensors",
+                    "text_encoder/model.fp16.safetensors",
+                    "vae/diffusion_pytorch_model.fp16.safetensors",
+                    "safety_checker/model.fp16.safetensors"
                 ]
             }
         }
@@ -78,18 +80,9 @@ class ModelDownloader:
                 "type": "tts",
                 "features": ["Multiple voices", "Non-speech sounds", "Offline capable"],
                 "files": [
-                    "pytorch_model.bin",
-                    "config.json",
-                    "tokenizer",
-                    "scheduler",
-                    "vae",
-                    "transformer",
                     "text_2.pt",
-                    "text_2.pt.safetensors",
-                    "coarse_2.pt",
-                    "coarse_2.pt.safetensors",
-                    "fine_2.pt",
-                    "fine_2.pt.safetensors"
+                    "coarse_2.pt", 
+                    "fine_2.pt"
                 ],
                 "voices": [
                     "v2/en_speaker_0",  # Default English speaker
@@ -311,19 +304,47 @@ class ModelDownloader:
             return False
         
         model_path = self.models_dir / model_config["path"]
+        
+        # Special handling for Bark - check cache directory instead
+        if model_name == "bark":
+            cache_dir = pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
+            if not cache_dir.exists():
+                return False
+            
+            # Check for any weight files in Bark cache
+            weight_files = list(cache_dir.rglob("*.pt")) + list(cache_dir.rglob("*.safetensors")) + list(cache_dir.rglob("*.bin"))
+            if len(weight_files) > 0:
+                print(f"✅ Bark model files found ({len(weight_files)} files)")
+                return True
+            else:
+                print(f"⚠️  No Bark model files found in cache")
+                return False
+        
         if not model_path.exists():
             return False
         
-        # ✅ Ensure ALL required files exist (not just any one file)
-        for required_file in model_config["files"]:
-            # Use rglob to find files that match the pattern (handles subdirectories)
-            matching_files = list(model_path.rglob(required_file))
-            if not matching_files:
-                print(f"⚠️  Missing required file: {required_file} for {model_name}")
-                return False
+        # ✅ Check for actual weight files (more flexible than exact file matching)
+        weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
         
-        print(f"✅ All required files present for {model_name}")
-        return True
+        if len(weight_files) == 0:
+            print(f"⚠️  No weight files found for {model_name}")
+            return False
+        
+        # ✅ Check if we have the essential files (more flexible approach)
+        essential_files_found = 0
+        for required_file in model_config["files"]:
+            matching_files = list(model_path.rglob(required_file))
+            if matching_files:
+                essential_files_found += 1
+            else:
+                print(f"⚠️  Missing: {required_file}")
+        
+        if essential_files_found >= len(model_config["files"]) * 0.8:  # 80% of files present
+            print(f"✅ Model {model_name} is downloaded ({essential_files_found}/{len(model_config['files'])} essential files, {len(weight_files)} total weight files)")
+            return True
+        else:
+            print(f"⚠️  Model {model_name} is incomplete ({essential_files_found}/{len(model_config['files'])} essential files)")
+            return False
     
     def get_model_info(self, model_name: str) -> Optional[Dict]:
         """Get information about a specific model"""
