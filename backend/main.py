@@ -995,6 +995,51 @@ async def download_model_stream(model_name: str, force: bool = False):
         }
     )
 
+@app.delete("/delete-model/{model_name}")
+async def delete_model(model_name: str):
+    """Delete a specific model"""
+    try:
+        import shutil
+        
+        # Define model paths
+        model_paths = {
+            "stable-video-diffusion": pathlib.Path("../models/video/stable-video-diffusion"),
+            "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
+            "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
+        }
+        
+        if model_name not in model_paths:
+            raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
+        
+        model_path = model_paths[model_name]
+        
+        if not model_path.exists():
+            return {"message": f"Model {model_name} not found", "deleted": False}
+        
+        # Calculate size before deletion
+        total_size = 0
+        if model_path.is_dir():
+            for file_path in model_path.rglob('*'):
+                if file_path.is_file():
+                    total_size += file_path.stat().st_size
+        
+        size_gb = total_size / (1024**3)
+        
+        # Delete the model
+        if model_path.is_dir():
+            shutil.rmtree(model_path)
+        else:
+            model_path.unlink()
+        
+        return {
+            "message": f"Model {model_name} deleted successfully",
+            "deleted": True,
+            "size_freed_gb": round(size_gb, 2)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete model {model_name}: {str(e)}")
+
 def restart_models():
     """Restart model loading after download"""
     global video_generator, audio_generator

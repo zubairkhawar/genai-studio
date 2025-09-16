@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Trash2, Cpu, RefreshCw, Volume2, Play, CheckCircle, XCircle, AlertTriangle, Zap, Settings as SettingsIcon, CloudDownload, HardDrive, Clock, FileText } from 'lucide-react';
+import { Trash2, Cpu, RefreshCw, Volume2, Play, CheckCircle, XCircle, AlertTriangle, Settings as SettingsIcon, CloudDownload, HardDrive, Clock, FileText } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 interface Model {
@@ -118,28 +118,6 @@ export default function Page() {
     }
   };
 
-  const optimizeModels = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/optimize-models', {
-        method: 'POST',
-      });
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        alert('Models optimized successfully! Check console for details.');
-        console.log('Optimization output:', result.output);
-        // Refresh models list
-        fetchModels();
-      } else {
-        alert(`Optimization failed: ${result.message}`);
-        console.error('Optimization error:', result.error);
-      }
-    } catch (error) {
-      console.error('Error optimizing models:', error);
-      alert('Error optimizing models. Check console for details.');
-    }
-  };
 
   const startDownload = async (force = false) => {
     // First, cleanup any existing download state
@@ -336,6 +314,38 @@ export default function Page() {
     }
   };
 
+  const deleteModel = async (modelName: string, modelType: 'video' | 'audio') => {
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${modelName}?\n\n` +
+      `This will free up storage space but you'll need to download it again to use it.\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`http://localhost:8000/delete-model/${modelName}`, {
+        method: 'DELETE',
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.deleted) {
+        alert(`✅ ${result.message}\n\nFreed up ${result.size_freed_gb} GB of storage space.`);
+        // Refresh models list
+        fetchModels();
+      } else {
+        alert(`❌ Failed to delete ${modelName}: ${result.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting model:', error);
+      alert(`❌ Error deleting ${modelName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const deleteModels = async () => {
     // First, cleanup any existing download state
     try {
@@ -469,12 +479,23 @@ export default function Page() {
                       <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm">{model.name}</span>
-                          <div className={`px-2 py-1 rounded-full text-xs ${
-                            model.loaded 
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                          }`}>
-                            {model.loaded ? 'Loaded' : 'Available'}
+                          <div className="flex items-center space-x-2">
+                            <div className={`px-2 py-1 rounded-full text-xs ${
+                              model.loaded 
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
+                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                            }`}>
+                              {model.loaded ? 'Loaded' : 'Available'}
+                            </div>
+                            {model.loaded && (
+                              <button
+                                onClick={() => deleteModel(model.id, 'video')}
+                                className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+                                title={`Delete ${model.name}`}
+                              >
+                                <Trash2 className="h-3 w-3 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center space-x-4 text-xs text-gray-500">
@@ -507,12 +528,23 @@ export default function Page() {
                       <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm">{model.name}</span>
-                          <div className={`px-2 py-1 rounded-full text-xs ${
-                            model.loaded 
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                          }`}>
-                            {model.loaded ? 'Loaded' : 'Available'}
+                          <div className="flex items-center space-x-2">
+                            <div className={`px-2 py-1 rounded-full text-xs ${
+                              model.loaded 
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
+                                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                            }`}>
+                              {model.loaded ? 'Loaded' : 'Available'}
+                            </div>
+                            {model.loaded && (
+                              <button
+                                onClick={() => deleteModel(model.id, 'audio')}
+                                className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+                                title={`Delete ${model.name}`}
+                              >
+                                <Trash2 className="h-3 w-3 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" />
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center space-x-4 text-xs text-gray-500">
@@ -733,28 +765,6 @@ export default function Page() {
               </div>
               )}
               
-              {/* Optimization button - show if models are downloaded */}
-              {models.video_models.length > 0 || models.audio_models.length > 0 ? (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Model Optimization
-                    </h3>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                    Remove duplicate files and keep only fp16 versions to reduce storage from 70+ GB to ~20-25 GB
-                  </p>
-                  <button
-                    onClick={optimizeModels}
-                    className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105 bg-green-500/10 text-green-600 hover:bg-green-500/20 border border-green-500/30 dark:text-green-400"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Zap className="h-4 w-4" />
-                      <span>Optimize Models</span>
-                    </div>
-                  </button>
-                </div>
-              ) : null}
           </div>
         </div>
       </div>
@@ -833,7 +843,7 @@ export default function Page() {
           {/* Actions */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg flex items-center space-x-2">
-              <Zap className="h-5 w-5 text-accent-green" />
+              <SettingsIcon className="h-5 w-5 text-accent-green" />
               <span>Actions</span>
             </h3>
             <div className="space-y-3">
