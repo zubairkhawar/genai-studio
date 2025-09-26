@@ -151,7 +151,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
             className={`w-full px-4 py-4 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 hover:border-accent-blue/50 hover:shadow-xl appearance-none cursor-pointer`}
             required
           >
-            <option value="">✨ Choose your AI model...</option>
+            <option value="">Choose your AI model...</option>
             {currentModels.map((model) => (
               <option key={model.id} value={model.id}>
                 {model.name}
@@ -225,7 +225,7 @@ export function GenerationForm({ onJobCreated, initialModelType }: GenerationFor
               e.target.style.height = 'auto';
               e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
             }}
-            placeholder="✨ Describe what you want to create... Be as detailed as possible for better results!"
+            placeholder="Describe what you want to create... Be as detailed as possible for better results!"
             className={`w-full px-4 py-4 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 resize-none min-h-[100px] hover:border-accent-blue/50 hover:shadow-xl`}
             rows={3}
             required

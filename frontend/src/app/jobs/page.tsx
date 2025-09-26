@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { JobQueue } from '@/components/JobQueue';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { getApiUrl } from '@/config';
-import { RefreshCw, Activity, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { RefreshCw, Activity, TrendingUp, Clock, AlertCircle, Trash2 } from 'lucide-react';
 
 interface Job {
   job_id: string;
@@ -24,6 +24,7 @@ export default function Page() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const colors = useThemeColors();
 
   const fetchJobs = async () => {
@@ -41,15 +42,39 @@ export default function Page() {
     }
   };
 
+  const clearAllJobs = async () => {
+    if (!confirm('Are you sure you want to clear all jobs? This action cannot be undone.')) {
+      return;
+    }
+    
+    setIsClearing(true);
+    try {
+      const res = await fetch(getApiUrl('/jobs'), {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Cleared jobs:', data);
+        // Refresh the jobs list
+        await fetchJobs();
+      } else {
+        console.error('Failed to clear jobs');
+      }
+    } catch (error) {
+      console.error('Failed to clear jobs:', error);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   useEffect(() => {
     fetchJobs();
     const t = setInterval(fetchJobs, 2000);
     return () => clearInterval(t);
   }, []);
 
-  // Calculate stats (only show total, completed, failed)
+  // Calculate stats (only show completed, failed)
   const stats = {
-    total: jobs.length,
     completed: jobs.filter(j => j.status === 'completed').length,
     failed: jobs.filter(j => j.status === 'failed').length,
   };
@@ -67,21 +92,20 @@ export default function Page() {
           </p>
         </div>
         <button
-          onClick={fetchJobs}
-          disabled={isRefreshing}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-all duration-200 ${
-            isRefreshing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+          onClick={clearAllJobs}
+          disabled={isClearing || jobs.length === 0}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl border border-red-200 dark:border-red-600 hover:bg-red-50 dark:hover:bg-red-700/50 transition-all duration-200 ${
+            isClearing || jobs.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
           }`}
         >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          <span className="text-sm font-medium">Refresh</span>
+          <Trash2 className={`h-4 w-4 ${isClearing ? 'animate-pulse' : ''}`} />
+          <span className="text-sm font-medium text-red-600 dark:text-red-400">Clear All</span>
         </button>
       </div>
 
-      {/* Stats Cards (only total, completed, failed) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats Cards (only show completed, failed) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
-          { label: 'Total Jobs', value: stats.total, icon: Activity, color: 'accent-blue' },
           { label: 'Completed', value: stats.completed, icon: TrendingUp, color: 'accent-green' },
           { label: 'Failed', value: stats.failed, icon: AlertCircle, color: 'accent-red' },
         ].map(({ label, value, icon: Icon, color }) => (

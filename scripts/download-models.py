@@ -53,12 +53,20 @@ MODELS = {
         "description": "Kandinsky text encoder"
     },
     "animatediff": {
-        "name": "AnimateDiff Motion Adapter",
-        "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
+        "name": "AnimateDiff Official Repository",
+        "repo_id": "guoyww/AnimateDiff",
         "local_dir": "../models/video/animatediff",
+        "size_gb": 5.0,
+        "priority": 3,
+        "description": "Official AnimateDiff repository with motion adapters and configs"
+    },
+    "animatediff_motion_adapter": {
+        "name": "AnimateDiff Motion Adapter v1.5.2",
+        "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
+        "local_dir": "../models/video/animatediff/motion_adapter",
         "size_gb": 2.0,
         "priority": 3,
-        "description": "Motion adapter for GIF generation"
+        "description": "Motion adapter for AnimateDiff v1.5.2"
     },
     "xtts-v2": {
         "name": "XTTS-v2",
@@ -370,6 +378,62 @@ def download_bark_models() -> bool:
         logger.error(f"❌ Bark setup failed: {e}")
         return False
     
+def download_animatediff_models() -> bool:
+    """Special handling for AnimateDiff models following official repository structure"""
+    try:
+        logger.info("🎬 Setting up AnimateDiff models...")
+        
+        # Download the official AnimateDiff repository
+        logger.info("📥 Downloading AnimateDiff official repository...")
+        repo_success = download_model("animatediff")
+        if not repo_success:
+            logger.error("❌ Failed to download AnimateDiff repository")
+            return False
+        
+        # Download the motion adapter separately
+        logger.info("📥 Downloading AnimateDiff motion adapter...")
+        adapter_success = download_model("animatediff_motion_adapter")
+        if not adapter_success:
+            logger.error("❌ Failed to download AnimateDiff motion adapter")
+            return False
+        
+        # Verify the setup
+        animatediff_dir = pathlib.Path("../models/video/animatediff")
+        motion_adapter_dir = pathlib.Path("../models/video/animatediff/motion_adapter")
+        
+        # Check for essential files
+        essential_files = [
+            "configs/prompts/1_animate/1_1_animate_RealisticVision.yaml",
+            "scripts/animate.py",
+            "app.py"
+        ]
+        
+        missing_files = []
+        for file_path in essential_files:
+            if not (animatediff_dir / file_path).exists():
+                missing_files.append(file_path)
+        
+        if missing_files:
+            logger.warning(f"⚠️  Missing essential files: {missing_files}")
+            return False
+        
+        # Check motion adapter files
+        adapter_files = list(motion_adapter_dir.rglob("*.safetensors")) + list(motion_adapter_dir.rglob("*.bin"))
+        if len(adapter_files) == 0:
+            logger.error("❌ No motion adapter weight files found")
+            return False
+        
+        logger.info("✅ AnimateDiff setup completed successfully")
+        logger.info(f"📁 Repository: {animatediff_dir}")
+        logger.info(f"📁 Motion adapter: {motion_adapter_dir}")
+        logger.info(f"📁 Config files: {len(list(animatediff_dir.rglob('*.yaml')))} YAML configs found")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ AnimateDiff setup failed: {e}")
+        return False
+
 def download_xtts_models() -> bool:
     """Special handling for XTTS-v2 models"""
     try:
@@ -479,6 +543,11 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
                 success = download_bark_models()
             elif model_id == "xtts-v2":
                 success = download_xtts_models()
+            elif model_id == "animatediff":
+                success = download_animatediff_models()
+            elif model_id == "animatediff_motion_adapter":
+                # Skip motion adapter as it's handled by download_animatediff_models
+                success = True
             else:
                 success = download_model_with_retry(model_id, force, max_retries=5)  # More retries for critical models
             

@@ -6,38 +6,16 @@ import { useThemeColors } from '@/hooks/useThemeColors';
 import { getApiUrl } from '@/config';
 import { ProgressModal } from '@/components/ProgressModal';
 
-interface Model {
-  id: string;
-  name: string;
-  description: string;
-  loaded: boolean;
-}
 
 export default function Page() {
   const colors = useThemeColors();
   const [prompt, setPrompt] = useState('');
-  const [models, setModels] = useState<{ image_models: Model[] }>({ image_models: [] });
-  const [selectedModel, setSelectedModel] = useState('stable-diffusion');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState<string>('');
   const [showProgress, setShowProgress] = useState(false);
 
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        const res = await fetch(getApiUrl('/models'));
-        const data = await res.json();
-        setModels({ image_models: data.image_models || [] });
-        if (data.image_models?.length) {
-          const saved = localStorage.getItem('default_image_model');
-          setSelectedModel(saved && data.image_models.find((m: any)=>m.id===saved) ? saved : data.image_models[0].id);
-        }
-      } catch (e) {}
-    };
-    loadModels();
-  }, []);
 
   useEffect(() => {
     if (!currentJobId) return;
@@ -61,7 +39,7 @@ export default function Page() {
   }, [currentJobId]);
 
   const onGenerate = async () => {
-    if (!prompt.trim() || !selectedModel) return;
+    if (!prompt.trim()) return;
     setIsGenerating(true);
     setShowProgress(true);
     setProgress(0);
@@ -73,7 +51,7 @@ export default function Page() {
         body: JSON.stringify({
           prompt: prompt.trim(),
           model_type: 'image',
-          model_name: selectedModel,
+          model_name: 'stable-diffusion',
           output_format: 'png'
         })
       });
@@ -99,22 +77,6 @@ export default function Page() {
 
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="p-6 rounded-2xl border bg-white dark:bg-slate-800/50">
-          <label className="block text-sm font-semibold mb-2">AI Model</label>
-          <select
-            value={selectedModel}
-            onChange={(e)=>{
-              setSelectedModel(e.target.value);
-              localStorage.setItem('default_image_model', e.target.value);
-            }}
-            className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800"
-          >
-            {models.image_models.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="p-6 rounded-2xl border bg-white dark:bg-slate-800/50">
           <label className="block text-sm font-semibold mb-2">Prompt</label>
           <textarea
             value={prompt}
@@ -126,7 +88,7 @@ export default function Page() {
           <div className="mt-4">
             <button
               onClick={onGenerate}
-              disabled={isGenerating || !prompt.trim() || !selectedModel}
+              disabled={isGenerating || !prompt.trim()}
               className={`inline-flex items-center space-x-2 px-6 py-3 rounded-xl text-white ${isGenerating? 'bg-gray-400' : 'bg-gradient-to-r from-accent-blue to-accent-violet hover:opacity-90'}`}
             >
               {isGenerating ? <Loader2 className="h-5 w-5 animate-spin"/> : <Sparkles className="h-5 w-5"/>}

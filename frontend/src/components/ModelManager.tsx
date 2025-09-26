@@ -95,13 +95,6 @@ export function ModelManager({}: ModelManagerProps) {
                 </h2>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={fetchModels}
-                    className="px-2 py-1 text-sm rounded-md border hover:bg-black/5 dark:hover:bg-white/5 flex items-center space-x-1"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    <span>Refresh</span>
-                  </button>
-                  <button
                     onClick={() => setIsOpen(false)}
                     className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                   >

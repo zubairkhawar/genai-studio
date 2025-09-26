@@ -453,14 +453,6 @@ export default function Page() {
             Manage AI models and system configuration
           </p>
         </div>
-        <button 
-          onClick={() => { fetchSettings(); fetchModels(); }} 
-          disabled={loadingModels}
-          className="flex items-center space-x-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-600 text-accent-blue hover:bg-accent-blue/10 transition-all duration-200 hover:scale-105"
-        >
-          <RefreshCw className={`h-4 w-4 ${loadingModels ? 'animate-spin' : ''}`} />
-          <span className="text-sm font-medium">Refresh</span>
-        </button>
       </div>
 
       {error && (

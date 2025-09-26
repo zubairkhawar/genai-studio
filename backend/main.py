@@ -89,9 +89,21 @@ download_status = {
             "files_verified": False
         },
         "animatediff": {
-            "name": "AnimateDiff",
-            "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
+            "name": "AnimateDiff Official Repository",
+            "repo_id": "guoyww/AnimateDiff",
             "local_dir": "../models/video/animatediff",
+            "size_gb": 5.0,
+            "status": "pending",
+            "progress": 0,
+            "downloaded_mb": 0,
+            "speed_mbps": 0,
+            "eta_seconds": 0,
+            "files_verified": False
+        },
+        "animatediff_motion_adapter": {
+            "name": "AnimateDiff Motion Adapter v1.5.2",
+            "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
+            "local_dir": "../models/video/animatediff/motion_adapter",
             "size_gb": 2.0,
             "status": "pending",
             "progress": 0,
@@ -1212,6 +1224,7 @@ async def delete_model(model_name: str):
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
             "kandinsky": pathlib.Path("../models/image/kandinsky"),
             "animatediff": pathlib.Path("../models/video/animatediff"),
+            "animatediff_motion_adapter": pathlib.Path("../models/video/animatediff/motion_adapter"),
             "xtts-v2": pathlib.Path("../models/audio/xtts-v2"),
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
         }
@@ -1512,6 +1525,12 @@ async def cancel_job(job_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"message": "Job cancelled"}
+
+@app.delete("/jobs")
+async def clear_all_jobs():
+    """Clear all jobs from the queue"""
+    count = job_queue.clear_all_jobs()
+    return {"message": f"Cleared {count} jobs", "cleared_count": count}
 
 @app.post("/models/{model_type}/{model_name}/load")
 async def load_model(model_type: str, model_name: str):

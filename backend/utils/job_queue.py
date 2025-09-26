@@ -60,6 +60,13 @@ class JobQueue:
                 return True
             return False
     
+    def clear_all_jobs(self) -> int:
+        """Clear all jobs from the queue"""
+        with self.lock:
+            count = len(self.jobs)
+            self.jobs.clear()
+            return count
+    
     def get_jobs_by_status(self, status: str) -> List[Dict[str, Any]]:
         """Get jobs by status"""
         with self.lock:

@@ -36,18 +36,14 @@ interface JobQueueProps {
 }
 
 export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
-  const [filter, setFilter] = useState<'all' | 'pending' | 'running' | 'completed' | 'failed'>('all');
+  const [filter, setFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const colors = useThemeColors();
 
   const filteredJobs = jobs.filter(job => {
-    if (filter === 'all') return true;
-    
     // Map backend statuses to frontend filters
     switch (filter) {
-      case 'pending':
-        return job.status === 'queued' || job.status === 'pending';
-      case 'running':
-        return job.status === 'processing' || job.status === 'running';
+      case 'all':
+        return true;
       case 'completed':
         return job.status === 'completed';
       case 'failed':
@@ -127,14 +123,12 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
       <div className={`flex border-b border-gray-200 dark:border-slate-700 px-6 bg-gradient-to-r from-transparent via-gray-50/50 dark:via-slate-800/50 to-transparent`}>
         {[
           { key: 'all', label: 'All Jobs', count: jobs.length, icon: Sparkles, color: 'accent-blue' },
-          { key: 'pending', label: 'Pending', count: jobs.filter(j => j.status === 'pending' || j.status === 'queued').length, icon: Clock, color: 'accent-violet' },
-          { key: 'running', label: 'Running', count: jobs.filter(j => j.status === 'running' || j.status === 'processing').length, icon: Zap, color: 'accent-green' },
           { key: 'completed', label: 'Completed', count: jobs.filter(j => j.status === 'completed').length, icon: CheckCircle, color: 'accent-green' },
           { key: 'failed', label: 'Failed', count: jobs.filter(j => j.status === 'failed').length, icon: XCircle, color: 'accent-red' },
         ].map(({ key, label, count, icon: Icon, color }) => (
           <button
             key={key}
-            onClick={() => setFilter(key as 'all' | 'pending' | 'running' | 'completed' | 'failed')}
+            onClick={() => setFilter(key as 'all' | 'completed' | 'failed')}
             className={`relative flex items-center space-x-3 px-6 py-4 text-sm font-medium transition-all duration-300 group ${
               filter === key
                 ? `text-${color} bg-${color}/10`
@@ -168,29 +162,16 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                 <div className="w-24 h-24 mx-auto bg-gradient-to-br from-accent-blue/20 via-accent-violet/20 to-accent-green/20 rounded-3xl flex items-center justify-center shadow-2xl">
                   <Sparkles className="h-12 w-12 text-accent-blue animate-pulse" />
                 </div>
-                <div className="absolute -top-3 -right-3 w-8 h-8 bg-gradient-to-r from-accent-green to-accent-blue rounded-full flex items-center justify-center shadow-lg">
-                  <span className="text-white text-sm">✨</span>
-                </div>
-                <div className="absolute -bottom-2 -left-2 w-6 h-6 bg-gradient-to-r from-accent-violet to-accent-blue rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs">⚡</span>
-                </div>
               </div>
               <h3 className={`text-2xl font-bold text-gray-900 dark:text-slate-100 mb-4 bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent`}>
-                {filter === 'all' ? 'Ready to Create Magic?' : `No ${filter} jobs yet`}
+                {filter === 'all' ? 'No jobs yet' : `No ${filter} jobs yet`}
               </h3>
               <p className={`text-gray-600 dark:text-slate-300 mb-8 text-lg leading-relaxed`}>
                 {filter === 'all' 
-                  ? 'Start by entering a creative prompt to generate your first video or audio masterpiece!'
+                  ? 'No jobs found. Create a new job to get started.'
                   : `No ${filter} jobs found. Try switching to another filter or create a new job.`
                 }
               </p>
-              {filter === 'all' && (
-                <div className="flex items-center justify-center space-x-3 text-accent-blue">
-                  <div className="w-2 h-2 bg-accent-blue rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium">Enter a prompt to get started</span>
-                  <div className="w-2 h-2 bg-accent-blue rounded-full animate-pulse"></div>
-                </div>
-              )}
             </div>
           </div>
         ) : (
