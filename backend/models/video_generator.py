@@ -11,7 +11,6 @@ from PIL import Image, ImageDraw
 import tempfile
 import shutil
 from .animatediff_generator import AnimateDiffGenerator
-from .kandinsky_generator import KandinskyGenerator
 
 class VideoGenerator:
     """Text-to-video generation using various models"""
@@ -34,20 +33,6 @@ class VideoGenerator:
                     "Memory efficient",
                     "Fast inference",
                     "M1 compatible"
-                ]
-            },
-            "kandinsky": {
-                "name": "Kandinsky 2.2",
-                "description": "High-quality image generation with artistic style",
-                "max_duration": 0,
-                "resolution": "512x512",
-                "type": "text2img",
-                "workflow": False,
-                "features": [
-                    "Artistic style",
-                    "High quality",
-                    "Different from SD",
-                    "Memory efficient"
                 ]
             },
             "stable-diffusion": {
@@ -108,27 +93,6 @@ class VideoGenerator:
                     print(f"Could not load AnimateDiff: {e}")
                     pipe = {"placeholder": True, "name": "animatediff"}
                     
-            elif model_name == "kandinsky":
-                # Initialize Kandinsky generator
-                try:
-                    print(f"Loading Kandinsky generator...")
-                    kandinsky = KandinskyGenerator(
-                        device=self.device,
-                        dtype=torch.float16 if self.device != "cpu" else torch.float32
-                    )
-                    
-                    success = await kandinsky.load_model()
-                    
-                    if success:
-                        print("✅ Successfully loaded Kandinsky")
-                        pipe = {"generator": True, "name": "kandinsky", "generator_instance": kandinsky}
-                    else:
-                        print("❌ Failed to load Kandinsky, using placeholder")
-                        pipe = {"placeholder": True, "name": "kandinsky"}
-                        
-                except Exception as e:
-                    print(f"Could not load Kandinsky: {e}")
-                    pipe = {"placeholder": True, "name": "kandinsky"}
                     
             elif model_name == "stable-diffusion":
                 # Initialize Stable Diffusion text-to-image generator
@@ -158,7 +122,7 @@ class VideoGenerator:
                     
                 
             else:
-                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, kandinsky, stable-diffusion")
+                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, stable-diffusion")
             
             self.models[model_name] = pipe
             print(f"Successfully loaded model: {model_name}")
@@ -178,9 +142,6 @@ class VideoGenerator:
             elif model_id == "animatediff":
                 # AnimateDiff has its own motion adapter files
                 model_path = pathlib.Path(f"../models/video/animatediff")
-            elif model_id == "kandinsky":
-                # Kandinsky has its own directory
-                model_path = pathlib.Path(f"../models/image/kandinsky")
             else:
                 model_path = pathlib.Path(f"../models/video/{model_id}")
             
@@ -220,14 +181,12 @@ class VideoGenerator:
             # Generate video using the appropriate method
             if model_name == "animatediff":
                 return await self._generate_with_animatediff(prompt, duration, output_format, progress_callback)
-            elif model_name == "kandinsky":
-                return await self._generate_with_kandinsky(prompt, duration, output_format, progress_callback)
             elif model_name == "stable-diffusion":
                 return await self._generate_with_stable_diffusion(prompt, duration, output_format, progress_callback)
             elif model_name == "stable-video-diffusion":
                 return await self._generate_with_pipeline(prompt, duration, output_format, image_input, progress_callback)
             else:
-                raise ValueError(f"Unsupported model: {model_name}. Supported models: animatediff, kandinsky, stable-diffusion, stable-video-diffusion")
+                raise ValueError(f"Unsupported model: {model_name}. Supported models: animatediff, stable-diffusion, stable-video-diffusion")
                 
         except Exception as e:
             raise RuntimeError(f"Video generation failed: {e}")
@@ -341,48 +300,6 @@ class VideoGenerator:
         except Exception as e:
             raise RuntimeError(f"AnimateDiff generation failed: {e}")
     
-    async def _generate_with_kandinsky(self, prompt: str, duration: int, output_format: str, 
-                                     progress_callback: Optional[callable] = None) -> str:
-        """Generate image using Kandinsky (for image generation)"""
-        try:
-            pipe = self.models["kandinsky"]
-            
-            # Check if this is a placeholder model
-            if isinstance(pipe, dict) and pipe.get("placeholder"):
-                print("Using placeholder for Kandinsky generation")
-                return await self._generate_placeholder(prompt, duration, output_format, palette=(168, 85, 247))
-            
-            # Check if this is a generator model
-            if isinstance(pipe, dict) and pipe.get("generator"):
-                generator = pipe.get("generator_instance")
-                if generator:
-                    print("Using Kandinsky for image generation")
-                    
-                    if progress_callback:
-                        progress_callback(25, "Generating image with Kandinsky...")
-                    
-                    # Generate single image
-                    image = await generator.generate_image(prompt=prompt)
-                    
-                    # Convert to video by duplicating the frame
-                    frames = [image] * max(6, duration * 6)  # 6 fps
-                    
-                    if progress_callback:
-                        progress_callback(80, "Converting image to video...")
-                    
-                    output_path = await self._save_video_frames(frames, output_format)
-                    
-                    return output_path
-                else:
-                    print("Kandinsky generator instance not available, using placeholder")
-                    return await self._generate_placeholder(prompt, duration, output_format, palette=(168, 85, 247))
-            
-            # Fallback to placeholder
-            print("Using placeholder for Kandinsky generation")
-            return await self._generate_placeholder(prompt, duration, output_format, palette=(168, 85, 247))
-            
-        except Exception as e:
-            raise RuntimeError(f"Kandinsky generation failed: {e}")
     
     async def _generate_with_stable_diffusion(self, prompt: str, duration: int, output_format: str, 
                                             progress_callback: Optional[callable] = None) -> str:

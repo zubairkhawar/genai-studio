@@ -655,7 +655,7 @@ async def get_available_models():
     image_models = []
     
     for model in all_video_models:
-        if model['id'] in ['stable-diffusion', 'kandinsky']:
+        if model['id'] in ['stable-diffusion']:
             image_models.append(model)
         else:
             video_models.append(model)
