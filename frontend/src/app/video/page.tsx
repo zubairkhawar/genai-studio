@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Play, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2, Upload, Image as ImageIcon, Type } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2, Type } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { getApiUrl } from '@/config';
 
@@ -30,10 +30,6 @@ export default function Page() {
   });
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const colors = useThemeColors();
   
   // Check for existing job on mount
@@ -121,39 +117,6 @@ export default function Page() {
     return () => clearInterval(interval);
   }, [currentJobId]);
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file');
-        return;
-      }
-      
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image file size must be less than 10MB');
-        return;
-      }
-      
-      setUploadedImage(file);
-      
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removeImage = () => {
-    setUploadedImage(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   const fetchJobs = async () => {
     if (currentStep !== 'progress' && currentStep !== 'results') return;
@@ -216,12 +179,6 @@ export default function Page() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
-    
-    // For image-to-video mode, require an uploaded image
-    if (generationMode === 'image-to-video' && !uploadedImage) {
-      alert('Please upload an image for image-to-video generation');
-      return;
-    }
     
     setIsGenerating(true);
     setCurrentStep('progress');
@@ -362,128 +319,6 @@ export default function Page() {
         
         <div className="relative p-10">
           <div className="space-y-8">
-            {/* Generation Mode Selection */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-blue/10">
-                  <Play className="h-5 w-5 text-accent-blue" />
-                </div>
-                <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
-                  Choose Generation Mode
-                </h2>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setGenerationMode('text-to-video')}
-                  className={`p-6 rounded-2xl border-2 transition-all duration-300 text-left ${
-                    generationMode === 'text-to-video'
-                      ? 'border-accent-blue bg-accent-blue/10 shadow-lg'
-                      : 'border-gray-200 dark:border-slate-600 hover:border-accent-blue/50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
-                      generationMode === 'text-to-video' ? 'bg-accent-blue/20' : 'bg-gray-100 dark:bg-slate-700'
-                    }`}>
-                      <Type className={`h-6 w-6 ${generationMode === 'text-to-video' ? 'text-accent-blue' : 'text-gray-500'}`} />
-                    </div>
-                    <div>
-                      <h3 className={`text-lg font-bold ${colors.text.primary}`}>
-                        Text-to-Video
-                      </h3>
-                      <p className={`text-sm ${colors.text.secondary}`}>
-                        Generate video from text description only
-          </p>
-        </div>
-                  </div>
-                </button>
-                
-        <button 
-                  onClick={() => setGenerationMode('image-to-video')}
-                  className={`p-6 rounded-2xl border-2 transition-all duration-300 text-left ${
-                    generationMode === 'image-to-video'
-                      ? 'border-accent-blue bg-accent-blue/10 shadow-lg'
-                      : 'border-gray-200 dark:border-slate-600 hover:border-accent-blue/50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${
-                      generationMode === 'image-to-video' ? 'bg-accent-blue/20' : 'bg-gray-100 dark:bg-slate-700'
-                    }`}>
-                      <ImageIcon className={`h-6 w-6 ${generationMode === 'image-to-video' ? 'text-accent-blue' : 'text-gray-500'}`} />
-                    </div>
-                    <div>
-                      <h3 className={`text-lg font-bold ${colors.text.primary}`}>
-                        Image-to-Video
-                      </h3>
-                      <p className={`text-sm ${colors.text.secondary}`}>
-                        Animate your own image with text prompt
-                      </p>
-                    </div>
-                  </div>
-        </button>
-              </div>
-            </div>
-
-            {/* Image Upload Section (for image-to-video mode) */}
-            {generationMode === 'image-to-video' && (
-              <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-violet/10">
-                    <Upload className="h-5 w-5 text-accent-violet" />
-                  </div>
-                  <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
-                    Upload Your Image
-                  </h2>
-      </div>
-
-                <div className="space-y-4">
-                  {!imagePreview ? (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-gray-300 dark:border-slate-600 rounded-2xl p-8 text-center hover:border-accent-violet hover:bg-accent-violet/5 transition-all duration-300 cursor-pointer"
-                    >
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-accent-violet/10">
-                          <Upload className="h-8 w-8 text-accent-violet" />
-                        </div>
-                        <div>
-                          <p className={`text-lg font-medium ${colors.text.primary}`}>
-                            Click to upload an image
-                          </p>
-                          <p className={`text-sm ${colors.text.secondary}`}>
-                            PNG, JPG, JPEG up to 10MB
-                          </p>
-                        </div>
-                      </div>
-          </div>
-        ) : (
-                    <div className="relative">
-                      <img
-                        src={imagePreview}
-                        alt="Upload preview"
-                        className="w-full max-w-md mx-auto rounded-2xl shadow-lg"
-                      />
-                      <button
-                        onClick={removeImage}
-                        className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Prompt Section */}
             <div className="space-y-4">
@@ -492,7 +327,7 @@ export default function Page() {
                   <Type className="h-5 w-5 text-accent-blue" />
                 </div>
                 <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
-                  {generationMode === 'text-to-video' ? 'Describe Your Video' : 'Describe the Animation'}
+                  Describe Your Video
                 </h2>
               </div>
 
@@ -500,11 +335,7 @@ export default function Page() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={
-                    generationMode === 'text-to-video' 
-                      ? "A cinematic shot of a futuristic city at sunset, with flying cars and neon lights reflecting on glass buildings..."
-                      : "Add gentle wind movement, make the clouds drift slowly, create a peaceful atmosphere..."
-                  }
+                  placeholder="A cinematic shot of a futuristic city at sunset, with flying cars and neon lights reflecting on glass buildings..."
                   className={`w-full px-6 py-6 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 hover:border-accent-blue/50 hover:shadow-xl resize-none text-lg leading-relaxed`}
                   rows={5}
                 />
@@ -521,21 +352,14 @@ export default function Page() {
 
               {/* Prompt Suggestions */}
               <div className="flex flex-wrap gap-3">
-                {(generationMode === 'text-to-video' ? [
+                {[
                   'cinematic lighting',
                   '4K quality',
                   'smooth camera movement',
                   'dramatic atmosphere',
                   'highly detailed',
                   'professional grade'
-                ] : [
-                  'gentle movement',
-                  'smooth animation',
-                  'natural motion',
-                  'subtle effects',
-                  'flowing motion',
-                  'dynamic elements'
-                ]).map((suggestion) => (
+                ].map((suggestion) => (
                   <button
                     key={suggestion}
                     type="button"
@@ -649,12 +473,6 @@ export default function Page() {
                 <button
                   onClick={() => {
                     setPrompt('');
-                    setUploadedImage(null);
-                    setImagePreview(null);
-                    setGenerationMode('text-to-video');
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = '';
-                    }
                   }}
                   className="px-6 py-2 text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors text-sm font-medium"
                 >
@@ -849,15 +667,9 @@ export default function Page() {
                   <button
                     onClick={() => {
                       setPrompt('');
-                      setUploadedImage(null);
-                      setImagePreview(null);
-                      setGenerationMode('text-to-video');
                       setCurrentStep('prompt');
                       setCurrentJobId(null);
                       setResults([]);
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = '';
-                      }
                     }}
                     className="flex items-center justify-center space-x-2 px-6 py-3 border border-accent-blue/30 text-accent-blue rounded-lg hover:bg-accent-blue/10 transition-colors"
                   >
