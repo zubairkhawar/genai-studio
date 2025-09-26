@@ -4,10 +4,8 @@ Comprehensive Model Download Script
 
 This script downloads all the recommended models for the text-to-media application:
 - AnimateDiff (for GIF generation)
-- Kandinsky 2.2 (for artistic image generation)
-- XTTS-v2 (for high-quality TTS)
-- Stable Diffusion (already downloaded)
-- Bark (legacy)
+- Stable Diffusion (for text-to-image generation)
+- Bark (for text-to-speech)
 """
 
 import os
@@ -35,22 +33,6 @@ MODELS = {
         "priority": 1,  # High priority - base model
         "description": "Text-to-image generation (base model for AnimateDiff)"
     },
-    "kandinsky": {
-        "name": "Kandinsky 2.2",
-        "repo_id": "kandinsky-community/kandinsky-2-2-decoder",
-        "local_dir": "../models/image/kandinsky",
-        "size_gb": 12.0,
-        "priority": 2,
-        "description": "Artistic image generation with different style"
-    },
-    "kandinsky_prior": {
-        "name": "Kandinsky 2.2 Prior",
-        "repo_id": "kandinsky-community/kandinsky-2-2-prior",
-        "local_dir": "../models/image/kandinsky-prior",
-        "size_gb": 2.0,
-        "priority": 2,
-        "description": "Kandinsky text encoder"
-    },
     "animatediff": {
         "name": "AnimateDiff Official Repository",
         "repo_id": "guoyww/AnimateDiff",
@@ -67,21 +49,13 @@ MODELS = {
         "priority": 3,
         "description": "Motion adapter for AnimateDiff v1.5.2"
     },
-    "xtts-v2": {
-        "name": "XTTS-v2",
-        "repo_id": "coqui/XTTS-v2",
-        "local_dir": "../models/audio/xtts-v2",
-        "size_gb": 4.0,
-        "priority": 4,
-        "description": "High-quality multi-speaker TTS"
-    },
     "bark": {
         "name": "Bark",
         "repo_id": "suno/bark",
         "local_dir": "../models/audio/bark",
         "size_gb": 5.0,
-        "priority": 6,  # Lower priority - legacy
-        "description": "Text-to-speech (legacy)"
+        "priority": 2,  # High priority - primary TTS model
+        "description": "Text-to-speech generation"
     }
 }
 
@@ -425,27 +399,6 @@ def download_animatediff_models() -> bool:
         logger.error(f"❌ AnimateDiff setup failed: {e}")
         return False
 
-def download_xtts_models() -> bool:
-    """Special handling for XTTS-v2 models"""
-    try:
-        logger.info("🎤 Setting up XTTS-v2 models...")
-        
-        # Prefer snapshot download of repo with weights
-        try:
-            return download_model("xtts-v2")
-        except Exception:
-            # Fallback to TTS API bootstrap (will pull to user cache)
-            try:
-                from TTS.api import TTS
-                TTS("tts_models/multilingual/multi-dataset/xtts_v2")
-                return True
-            except Exception as e:
-                logger.error(f"❌ XTTS-v2 setup via TTS failed: {e}")
-                return False
-            
-    except Exception as e:
-        logger.error(f"❌ XTTS-v2 setup failed: {e}")
-        return False
         
 def verify_model_integrity(model_id: str) -> bool:
     """Verify that a model download is complete and not corrupted"""

@@ -76,18 +76,6 @@ download_status = {
             "eta_seconds": 0,
             "files_verified": False
         },
-        "kandinsky": {
-            "name": "Kandinsky 2.2",
-            "repo_id": "kandinsky-community/kandinsky-2-2-decoder",
-            "local_dir": "../models/image/kandinsky",
-            "size_gb": 12.0,
-            "status": "pending",
-            "progress": 0,
-            "downloaded_mb": 0,
-            "speed_mbps": 0,
-            "eta_seconds": 0,
-            "files_verified": False
-        },
         "animatediff": {
             "name": "AnimateDiff Official Repository",
             "repo_id": "guoyww/AnimateDiff",
@@ -105,18 +93,6 @@ download_status = {
             "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
             "local_dir": "../models/video/animatediff/motion_adapter",
             "size_gb": 2.0,
-            "status": "pending",
-            "progress": 0,
-            "downloaded_mb": 0,
-            "speed_mbps": 0,
-            "eta_seconds": 0,
-            "files_verified": False
-        },
-        "xtts-v2": {
-            "name": "XTTS-v2",
-            "repo_id": "coqui/XTTS-v2",
-            "local_dir": "../models/audio/xtts-v2",
-            "size_gb": 4.0,
             "status": "pending",
             "progress": 0,
             "downloaded_mb": 0,
@@ -1209,10 +1185,8 @@ async def delete_model(model_name: str):
         # Define model paths
         model_paths = {
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
-            "kandinsky": pathlib.Path("../models/image/kandinsky"),
             "animatediff": pathlib.Path("../models/video/animatediff"),
             "animatediff_motion_adapter": pathlib.Path("../models/video/animatediff/motion_adapter"),
-            "xtts-v2": pathlib.Path("../models/audio/xtts-v2"),
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
         }
         

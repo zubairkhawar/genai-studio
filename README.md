@@ -97,8 +97,6 @@ python scripts/download-models.py --model animatediff
 
 ### Available Models
 - **AnimateDiff** (~2GB) - GIF generation
-- **Kandinsky 2.2** (~12GB) - Artistic images
-- **XTTS-v2** (~4GB) - High-quality TTS
 - **Stable Diffusion** (~44GB) - Text-to-image
 - **Bark** (~5GB) - Creative TTS
 
@@ -114,7 +112,7 @@ python scripts/download-models.py --model animatediff
 ### Audio Generation
 1. Navigate to the Audio page
 2. Enter your text prompt
-3. Select AI model (XTTS-v2 recommended)
+3. Select AI model (Bark recommended)
 4. Choose voice style and format
 5. Click "Generate Audio"
 

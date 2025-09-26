@@ -486,18 +486,23 @@ export default function Page() {
                 <span className="font-medium text-accent-green">Available Models</span>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Video Models */}
                 {models.video_models.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100 flex items-center space-x-2">
-                      <Play className="h-4 w-4 text-accent-blue" />
-                      <span>Video Models</span>
-                    </h4>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg bg-accent-blue/5 border border-accent-blue/20">
+                      <Play className="h-5 w-5 text-accent-blue" />
+                      <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Video Models</h4>
+                    </div>
                     {models.video_models.map((model) => (
-                      <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{model.name}</span>
+                      <div key={model.id} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-semibold text-sm text-gray-900 dark:text-slate-100">{model.name}</span>
+                            {model.description && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{model.description}</p>
+                            )}
+                          </div>
                           <div className="flex items-center space-x-2">
                             <div className={`px-2 py-1 rounded-full text-xs ${
                               model.size_gb && model.size_gb > 0
@@ -578,14 +583,19 @@ export default function Page() {
                 {/* Image Models */}
                 {models.image_models && models.image_models.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100 flex items-center space-x-2">
-                      <ImageIcon className="h-4 w-4 text-accent-green" />
-                      <span>Image Models</span>
-                    </h4>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg bg-accent-green/5 border border-accent-green/20">
+                      <ImageIcon className="h-5 w-5 text-accent-green" />
+                      <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Image Models</h4>
+                    </div>
                     {models.image_models && models.image_models.map((model) => (
-                      <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{model.name}</span>
+                      <div key={model.id} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-semibold text-sm text-gray-900 dark:text-slate-100">{model.name}</span>
+                            {model.description && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{model.description}</p>
+                            )}
+                          </div>
                           <div className="flex items-center space-x-2">
                             <div className={`px-2 py-1 rounded-full text-xs ${
                               model.loaded 
@@ -668,14 +678,19 @@ export default function Page() {
                 {/* Audio Models */}
                 {models.audio_models.length > 0 && (
                   <div className="space-y-3">
-                    <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100 flex items-center space-x-2">
-                      <Volume2 className="h-4 w-4 text-accent-violet" />
-                      <span>Audio Models</span>
-                    </h4>
+                    <div className="flex items-center space-x-2 p-3 rounded-lg bg-accent-violet/5 border border-accent-violet/20">
+                      <Volume2 className="h-5 w-5 text-accent-violet" />
+                      <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Audio Models</h4>
+                    </div>
                     {models.audio_models.map((model) => (
-                      <div key={model.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{model.name}</span>
+                      <div key={model.id} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-semibold text-sm text-gray-900 dark:text-slate-100">{model.name}</span>
+                            {model.description && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{model.description}</p>
+                            )}
+                          </div>
                           <div className="flex items-center space-x-2">
                             <div className={`px-2 py-1 rounded-full text-xs ${
                               model.size_gb && model.size_gb > 0
@@ -787,7 +802,7 @@ export default function Page() {
               <p className={`text-sm ${colors.text.secondary} mt-1`}>
                 {models.video_models.length > 0 || models.audio_models.length > 0 || (models.image_models && models.image_models.length > 0) 
                   ? "Models are downloaded and ready to use. Delete them to free up space."
-                  : "Download AnimateDiff, Kandinsky, XTTS-v2, Stable Diffusion, and Bark models (~67GB total) with resume capability"
+                  : "Download AnimateDiff, Stable Diffusion, and Bark models (~51GB total) with resume capability"
                 }
               </p>
             </div>
