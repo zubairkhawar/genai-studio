@@ -463,7 +463,7 @@ export default function Page() {
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-accent-blue to-accent-violet opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
                 <Play className="h-7 w-7 group-hover:scale-110 transition-transform duration-300" />
                 <span>
-                  {generationMode === 'text-to-video' ? 'Generate Video from Text' : 'Animate Image to Video'}
+                  Generate Video from Text
                 </span>
                 <div className="absolute inset-0 rounded-2xl border-2 border-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </button>
