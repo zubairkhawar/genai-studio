@@ -787,7 +787,7 @@ export default function Page() {
               <p className={`text-sm ${colors.text.secondary} mt-1`}>
                 {models.video_models.length > 0 || models.audio_models.length > 0 || (models.image_models && models.image_models.length > 0) 
                   ? "Models are downloaded and ready to use. Delete them to free up space."
-                  : "Download AnimateDiff, Kandinsky, XTTS-v2, Stable Diffusion, SVD, and Bark models (~97GB total) with resume capability"
+                  : "Download AnimateDiff, Kandinsky, XTTS-v2, Stable Diffusion, and Bark models (~67GB total) with resume capability"
                 }
               </p>
             </div>

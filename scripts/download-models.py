@@ -7,7 +7,6 @@ This script downloads all the recommended models for the text-to-media applicati
 - Kandinsky 2.2 (for artistic image generation)
 - XTTS-v2 (for high-quality TTS)
 - Stable Diffusion (already downloaded)
-- Stable Video Diffusion (legacy)
 - Bark (legacy)
 """
 
@@ -75,14 +74,6 @@ MODELS = {
         "size_gb": 4.0,
         "priority": 4,
         "description": "High-quality multi-speaker TTS"
-    },
-    "stable_video_diffusion": {
-        "name": "Stable Video Diffusion",
-        "repo_id": "stabilityai/stable-video-diffusion-img2vid",
-        "local_dir": "../models/video/stable-video-diffusion",
-        "size_gb": 30.0,
-        "priority": 5,  # Lower priority - legacy
-        "description": "Image-to-video generation (legacy)"
     },
     "bark": {
         "name": "Bark",

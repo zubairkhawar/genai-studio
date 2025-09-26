@@ -39,48 +39,6 @@ def find_duplicate_files(directory: pathlib.Path, patterns: List[str]) -> Dict[s
     
     return duplicates
 
-def optimize_svd_models() -> Tuple[float, float]:
-    """Optimize Stable Video Diffusion models"""
-    print("🎬 Optimizing Stable Video Diffusion models...")
-    
-    svd_dir = pathlib.Path("models/video/stable-video-diffusion")
-    if not svd_dir.exists():
-        print("❌ SVD directory not found")
-        return 0.0, 0.0
-    
-    original_size = get_directory_size_gb(svd_dir)
-    print(f"📊 Original SVD size: {original_size:.2f} GB")
-    
-    # Files to keep (fp16 versions)
-    files_to_keep = [
-        "svd.safetensors",
-        "svd_image_decoder.safetensors", 
-        "unet/diffusion_pytorch_model.fp16.safetensors",
-        "image_encoder/model.fp16.safetensors",
-        "vae/diffusion_pytorch_model.fp16.safetensors"
-    ]
-    
-    # Files to remove (full precision duplicates)
-    files_to_remove = [
-        "unet/diffusion_pytorch_model.safetensors",  # 5.7GB -> keep fp16 (2.8GB)
-        "image_encoder/model.safetensors",           # 2.4GB -> keep fp16 (1.2GB) 
-        "vae/diffusion_pytorch_model.safetensors"    # 373MB -> keep fp16 (186MB)
-    ]
-    
-    removed_size = 0.0
-    for file_pattern in files_to_remove:
-        files = list(svd_dir.rglob(file_pattern))
-        for file_path in files:
-            if file_path.exists():
-                size_gb = get_file_size_gb(file_path)
-                print(f"🗑️  Removing: {file_path.name} ({size_gb:.2f} GB)")
-                file_path.unlink()
-                removed_size += size_gb
-    
-    new_size = get_directory_size_gb(svd_dir)
-    print(f"✅ SVD optimization complete: {original_size:.2f} GB → {new_size:.2f} GB (saved {removed_size:.2f} GB)")
-    
-    return removed_size, new_size
 
 def optimize_sd_models() -> Tuple[float, float]:
     """Optimize Stable Diffusion models"""
@@ -204,10 +162,6 @@ def main():
     
     total_saved = 0.0
     
-    # Optimize SVD
-    svd_saved, svd_new = optimize_svd_models()
-    total_saved += svd_saved
-    print()
     
     # Optimize SD  
     sd_saved, sd_new = optimize_sd_models()

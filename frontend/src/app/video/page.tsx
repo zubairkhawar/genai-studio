@@ -234,7 +234,7 @@ export default function Page() {
         prompt: prompt.trim(),
         model_type: 'video',
         model_name: settings.model,
-        duration: 4, // Optimal for SVD: 4 seconds
+        duration: 4, // Optimal duration for video generation
         output_format: settings.format
       };
       
@@ -585,10 +585,10 @@ export default function Page() {
                         </div>
                         <div>
                           <h4 className={`font-semibold ${colors.text.primary} mb-1`}>
-                            Optimized for SVD Model
+                            Optimized for Video Generation
                           </h4>
                           <p className={`text-sm ${colors.text.secondary}`}>
-                            Resolution: 576×1024 (optimal for SVD) • Duration: 4 seconds (best quality)
+                            Resolution: 576×1024 (optimal for video) • Duration: 4 seconds (best quality)
                           </p>
                         </div>
                       </div>
@@ -606,7 +606,6 @@ export default function Page() {
                       >
                         <option value="animatediff">AnimateDiff - Perfect for GIFs</option>
                         <option value="kandinsky">Kandinsky - Artistic Images</option>
-                        <option value="stable-video-diffusion">Stable Video Diffusion - High Quality</option>
                       </select>
                     </div>
 
@@ -728,7 +727,7 @@ export default function Page() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-500">Resolution:</span>
-                  <p className="font-medium">576×1024 (SVD Optimal)</p>
+                  <p className="font-medium">576×1024 (Video Optimal)</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Duration:</span>
@@ -743,7 +742,6 @@ export default function Page() {
                   <p className="font-medium">
                     {settings.model === 'animatediff' ? 'AnimateDiff' :
                      settings.model === 'kandinsky' ? 'Kandinsky 2.2' :
-                     settings.model === 'stable-video-diffusion' ? 'Stable Video Diffusion' :
                      settings.model}
                   </p>
                 </div>
@@ -815,7 +813,7 @@ export default function Page() {
               <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-500">Resolution:</span>
-                  <p className="font-medium">576×1024 (SVD Optimal)</p>
+                  <p className="font-medium">576×1024 (Video Optimal)</p>
                   </div>
                   <div>
                     <span className="text-gray-500">Duration:</span>
@@ -830,7 +828,6 @@ export default function Page() {
                   <p className="font-medium">
                     {settings.model === 'animatediff' ? 'AnimateDiff' :
                      settings.model === 'kandinsky' ? 'Kandinsky 2.2' :
-                     settings.model === 'stable-video-diffusion' ? 'Stable Video Diffusion' :
                      settings.model}
                   </p>
                 </div>

@@ -124,18 +124,6 @@ download_status = {
             "eta_seconds": 0,
             "files_verified": False
         },
-        "stable_video_diffusion": {
-            "name": "Stable Video Diffusion",
-            "repo_id": "stabilityai/stable-video-diffusion-img2vid", 
-            "local_dir": "../models/video/stable-video-diffusion",
-            "size_gb": 30.0,
-            "status": "pending",
-            "progress": 0,
-            "downloaded_mb": 0,
-            "speed_mbps": 0,
-            "eta_seconds": 0,
-            "files_verified": False
-        },
         "bark": {
             "name": "Bark",
             "repo_id": "suno/bark",
@@ -1220,7 +1208,6 @@ async def delete_model(model_name: str):
         
         # Define model paths
         model_paths = {
-            "stable-video-diffusion": pathlib.Path("../models/video/stable-video-diffusion"),
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
             "kandinsky": pathlib.Path("../models/image/kandinsky"),
             "animatediff": pathlib.Path("../models/video/animatediff"),
@@ -1616,7 +1603,6 @@ async def delete_models():
         
         # List of model directories to delete
         model_dirs = [
-            ('video', 'stable-video-diffusion'),
             ('image', 'stable-diffusion'), 
             ('audio', 'bark'),
             ('', 'huggingface')  # Common cache directory

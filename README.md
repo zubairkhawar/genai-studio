@@ -7,7 +7,6 @@ A comprehensive AI-powered application for generating videos, images, and audio 
 ### 🎥 Video Generation
 - **AnimateDiff** - Perfect for GIF generation with looping animations
 - **Kandinsky 2.2** - Artistic image generation with unique style
-- **Stable Video Diffusion** - High-quality image-to-video generation
 
 ### 🎵 Audio Generation
 - **XTTS-v2** - High-quality multi-speaker text-to-speech
@@ -101,7 +100,6 @@ python scripts/download-models.py --model animatediff
 - **Kandinsky 2.2** (~12GB) - Artistic images
 - **XTTS-v2** (~4GB) - High-quality TTS
 - **Stable Diffusion** (~44GB) - Text-to-image
-- **Stable Video Diffusion** (~30GB) - Image-to-video
 - **Bark** (~5GB) - Creative TTS
 
 ## 🎯 Usage
@@ -166,7 +164,6 @@ text-to-media-app/
 - **Kandinsky** - For artistic, stylized GIFs
 
 ### For High-Quality Videos
-- **Stable Video Diffusion** - Best quality but requires more resources
 - **AnimateDiff** - Good balance of quality and speed
 
 ### For Audio Generation

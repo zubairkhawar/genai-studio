@@ -72,8 +72,6 @@ show_usage() {
     echo "  --help                   Show this help message"
     echo ""
     echo "Available models:"
-    echo "  Video:"
-    echo "    - stable-video-diffusion  (Official SVD - Text/Image-to-Video - ~5GB)"
     echo "  Image:"
     echo "    - stable-diffusion        (Stable Diffusion v1.5 - Text-to-Image - ~4GB)"
     echo "  Audio:"
@@ -183,8 +181,7 @@ case $ACTION in
         download_models "--all $FORCE"
         ;;
     "video")
-        print_info "Downloading video model..."
-        download_models "--model stable-video-diffusion $FORCE"
+        print_info "No video models available (SVD removed)"
         ;;
     "image")
         print_info "Downloading image model..."

@@ -39,7 +39,6 @@
     "text-to-video",
     "text-to-audio",
     "generative-ai",
-    "stable-video-diffusion",
     "bark",
     "audioldm",
     "fastapi",
