@@ -1,0 +1,81 @@
+{
+  "name": "genai-media-studio",
+  "version": "1.0.0",
+  "description": "A modern, AI-powered desktop/web application for generating video and audio from text prompts",
+  "main": "index.js",
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd backend && pip install -r requirements.txt",
+    "install:frontend": "cd frontend && npm install",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "bash -lc 'cd backend && source venv/bin/activate && python main.py'",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "bash -lc 'cd backend && source venv/bin/activate && python main.py'",
+    "start:frontend": "cd frontend && npm run start",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && python -m pytest",
+    "test:frontend": "cd frontend && npm run test",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && flake8 .",
+    "lint:frontend": "cd frontend && npm run lint",
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "cd backend && black . && isort .",
+    "format:frontend": "cd frontend && npm run format",
+    "clean": "npm run clean:backend && npm run clean:frontend",
+    "clean:backend": "cd backend && find . -type d -name __pycache__ -exec rm -rf {} + && find . -type f -name '*.pyc' -delete",
+    "clean:frontend": "cd frontend && rm -rf .next && rm -rf node_modules",
+    "reset": "npm run clean && npm run install:all",
+    "docker:build": "docker build -t genai-media-studio .",
+    "docker:run": "docker run -p 3000:3000 -p 8000:8000 genai-media-studio",
+    "docs": "cd docs && npm run dev",
+    "check:gpu": "node scripts/check-gpu.js",
+    "check:deps": "node scripts/check-dependencies.js"
+  },
+  "keywords": [
+    "ai",
+    "text-to-video",
+    "text-to-audio",
+    "generative-ai",
+    "stable-video-diffusion",
+    "bark",
+    "audioldm",
+    "fastapi",
+    "nextjs",
+    "tailwindcss",
+    "glassmorphism",
+    "dark-mode",
+    "gpu",
+    "cuda",
+    "rocm"
+  ],
+  "author": "Zubair Khawar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zubairkhawar/genai-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zubairkhawar/genai-studio/issues"
+  },
+  "homepage": "https://github.com/zubairkhawar/genai-studio#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.8.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "config": {
+    "backend_port": 8000,
+    "frontend_port": 3000,
+    "output_dir": "outputs",
+    "models_dir": "models"
+  }
+}

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Test - Preset Audio Playback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .audio-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .voice-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .voice-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Audio Test - Preset Audio Playback</h1>
+        
+        <div class="status info">
+            <strong>Test Status:</strong> Testing preset audio functionality and playback
+        </div>
+
+        <div class="audio-section">
+            <h3>1. Test Audio File (Generated)</h3>
+            <p>This is a test audio file created with ffmpeg (440Hz tone, 2 seconds):</p>
+            <audio controls>
+                <source src="http://localhost:8000/outputs/audio/test_audio.wav" type="audio/wav">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+
+        <div class="audio-section">
+            <h3>2. Backend API Status</h3>
+            <button onclick="testBackend()">Test Backend Connection</button>
+            <button onclick="testVoicePreviews()">Test Voice Previews</button>
+            <button onclick="testBarkVoices()">Test Bark Voices</button>
+            <div id="backend-status"></div>
+        </div>
+
+        <div class="audio-section">
+            <h3>3. Voice Preview Test</h3>
+            <button onclick="generateVoicePreviews()">Generate Voice Previews</button>
+            <div id="voice-previews"></div>
+        </div>
+
+        <div class="audio-section">
+            <h3>4. Audio Generation Test</h3>
+            <input type="text" id="test-prompt" placeholder="Enter text to convert to speech" value="Hello, this is a test of the bark audio generation system." style="width: 100%; padding: 10px; margin: 10px 0;">
+            <button onclick="generateAudio()">Generate Audio</button>
+            <div id="generation-status"></div>
+        </div>
+
+        <div class="audio-section">
+            <h3>5. Available Bark Voices</h3>
+            <div id="bark-voices" class="voice-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        async function testBackend() {
+            const statusDiv = document.getElementById('backend-status');
+            try {
+                const response = await fetch(`${API_BASE}/`);
+                const data = await response.json();
+                statusDiv.innerHTML = `<div class="status success">✅ Backend is running: ${data.message}</div>`;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Backend connection failed: ${error.message}</div>`;
+            }
+        }
+
+        async function testVoicePreviews() {
+            const statusDiv = document.getElementById('backend-status');
+            try {
+                const response = await fetch(`${API_BASE}/voice-previews`);
+                const data = await response.json();
+                statusDiv.innerHTML = `<div class="status info">📊 Voice Previews: ${data.previews.length} available</div>`;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Voice previews failed: ${error.message}</div>`;
+            }
+        }
+
+        async function testBarkVoices() {
+            const statusDiv = document.getElementById('backend-status');
+            try {
+                const response = await fetch(`${API_BASE}/bark-voices`);
+                const data = await response.json();
+                statusDiv.innerHTML = `<div class="status success">🎤 Bark Voices: ${data.voices.length} available</div>`;
+                
+                // Display voices
+                const voicesDiv = document.getElementById('bark-voices');
+                voicesDiv.innerHTML = data.voices.map(voice => `
+                    <div class="voice-item">
+                        <strong>${voice.name}</strong><br>
+                        <small>${voice.description}</small><br>
+                        <small>ID: ${voice.id}</small>
+                    </div>
+                `).join('');
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Bark voices failed: ${error.message}</div>`;
+            }
+        }
+
+        async function generateVoicePreviews() {
+            const statusDiv = document.getElementById('voice-previews');
+            statusDiv.innerHTML = '<div class="status info">🔄 Generating voice previews...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/generate-voice-previews`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                statusDiv.innerHTML = `<div class="status success">✅ ${data.message}</div>`;
+                
+                // Refresh voice previews
+                setTimeout(testVoicePreviews, 2000);
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Voice preview generation failed: ${error.message}</div>`;
+            }
+        }
+
+        async function generateAudio() {
+            const prompt = document.getElementById('test-prompt').value;
+            const statusDiv = document.getElementById('generation-status');
+            
+            if (!prompt.trim()) {
+                statusDiv.innerHTML = '<div class="status error">❌ Please enter a prompt</div>';
+                return;
+            }
+            
+            statusDiv.innerHTML = '<div class="status info">🔄 Generating audio...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        model_type: 'audio',
+                        model_name: 'bark',
+                        sample_rate: 22050,
+                        output_format: 'wav',
+                        voice_style: 'auto'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.job_id) {
+                    statusDiv.innerHTML = `<div class="status info">⏳ Job started: ${data.job_id}</div>`;
+                    
+                    // Poll for completion
+                    pollJobStatus(data.job_id);
+                } else {
+                    statusDiv.innerHTML = `<div class="status error">❌ Generation failed: ${data.message || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="status error">❌ Generation request failed: ${error.message}</div>`;
+            }
+        }
+
+        async function pollJobStatus(jobId) {
+            const statusDiv = document.getElementById('generation-status');
+            
+            const poll = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/jobs`);
+                    const jobs = await response.json();
+                    const job = jobs.find(j => j.job_id === jobId);
+                    
+                    if (job) {
+                        if (job.status === 'completed') {
+                            statusDiv.innerHTML = `
+                                <div class="status success">✅ Audio generated successfully!</div>
+                                <audio controls style="width: 100%; margin: 10px 0;">
+                                    <source src="${API_BASE}${job.output_file.replace('../outputs', '/outputs')}" type="audio/wav">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            `;
+                        } else if (job.status === 'failed') {
+                            statusDiv.innerHTML = `<div class="status error">❌ Generation failed: ${job.error}</div>`;
+                        } else {
+                            statusDiv.innerHTML = `<div class="status info">⏳ Status: ${job.status} (${job.progress}%)</div>`;
+                            setTimeout(poll, 2000);
+                        }
+                    }
+                } catch (error) {
+                    statusDiv.innerHTML = `<div class="status error">❌ Status check failed: ${error.message}</div>`;
+                }
+            };
+            
+            poll();
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            testBackend();
+            testBarkVoices();
+        };
+    </script>
+</body>
+</html>

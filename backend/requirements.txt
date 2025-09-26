@@ -1,0 +1,42 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+diffusers==0.21.4
+transformers==4.35.2
+accelerate==0.24.1
+xformers==0.0.22
+opencv-python==4.8.1.78
+Pillow==10.1.0
+numpy==1.24.3
+scipy==1.11.4
+librosa==0.10.1
+soundfile==0.12.1
+ffmpeg-python==0.2.0
+pydantic==2.5.0
+python-dotenv==1.0.0
+aiofiles==23.2.1
+redis==5.0.1
+celery==5.3.4
+psutil==5.9.6
+GPUtil==1.4.0
+pynvml==11.5.1
+
+# Optional AI model dependencies
+bark>=0.1.0
+audiocraft>=1.3.0
+audioldm>=0.0.1
+TTS>=0.20.0  # For XTTS-v2
+
+# AMD ROCm support (optional)
+# torch-rocm>=2.0.0  # Uncomment for AMD GPU support
+
+# Additional audio processing
+pydub>=0.25.1
+webrtcvad>=2.0.10
+
+# Model downloading and caching
+huggingface-hub>=0.19.0
+tqdm>=4.65.0
