@@ -10,8 +10,6 @@ import numpy as np
 from PIL import Image, ImageDraw
 import tempfile
 import shutil
-from .svd_workflow import SVDWorkflow
-from .text_to_video_pipeline import TextToVideoPipeline
 from .animatediff_generator import AnimateDiffGenerator
 from .kandinsky_generator import KandinskyGenerator
 
@@ -22,8 +20,6 @@ class VideoGenerator:
         self.gpu_info = gpu_info
         self.device = gpu_info["device"]
         self.models = {}
-        self.svd_workflow = None
-        self.text_to_video_pipeline = None
         self.available_models = {
             "animatediff": {
                 "name": "AnimateDiff",
@@ -54,21 +50,6 @@ class VideoGenerator:
                     "Memory efficient"
                 ]
             },
-            "stable-video-diffusion": {
-                "name": "Stable Video Diffusion",
-                "description": "Official SVD - High-quality text-to-video and image-to-video generation",
-                "max_duration": 4,
-                "resolution": "576x1024",
-                "type": "text2vid",
-                "workflow": True,
-                "features": [
-                    "Text-to-video generation",
-                    "Image-to-video generation", 
-                    "Frame interpolation",
-                    "High quality output",
-                    "Local-first inference"
-                ]
-            },
             "stable-diffusion": {
                 "name": "Stable Diffusion",
                 "description": "Text-to-image model used for video generation pipeline",
@@ -88,12 +69,10 @@ class VideoGenerator:
         """Load default models - only called when explicitly requested"""
         try:
             # Check if models exist locally before attempting to load
-            svd_path = pathlib.Path("../models/video/stable-video-diffusion")
             sd_path = pathlib.Path("../models/image/stable-diffusion")
             
-            if svd_path.exists() and sd_path.exists():
-                print("Local models found, loading Stable Video Diffusion...")
-                await self.load_model("stable-video-diffusion")
+            if sd_path.exists():
+                print("Local Stable Diffusion model found...")
             else:
                 print("No local models found. Use 'Download Models' to download them first.")
         except Exception as e:
@@ -177,37 +156,9 @@ class VideoGenerator:
                     print(f"Could not load Stable Diffusion: {e}")
                     pipe = {"placeholder": True, "name": "stable-diffusion"}
                     
-            elif model_name == "stable-video-diffusion":
-                # Initialize text-to-video pipeline
-                try:
-                    print(f"Loading Text-to-Video pipeline...")
-                    self.text_to_video_pipeline = TextToVideoPipeline(
-                        device=self.device,
-                        dtype=torch.float16 if self.device != "cpu" else torch.float32
-                    )
-                    
-                    # Try to load from local directories first
-                    svd_path = "../models/video/stable-video-diffusion"
-                    sd_path = "../models/image/stable-diffusion"
-                    
-                    success = await self.text_to_video_pipeline.load_models(
-                        text_to_image_path=sd_path,
-                        svd_path=svd_path
-                    )
-                    
-                    if success:
-                        print("✅ Successfully loaded Text-to-Video pipeline")
-                        pipe = {"pipeline": True, "name": "stable-video-diffusion", "pipeline_instance": self.text_to_video_pipeline}
-                    else:
-                        print("❌ Failed to load pipeline, using placeholder")
-                        pipe = {"placeholder": True, "name": "stable-video-diffusion"}
-                        
-                except Exception as e:
-                    print(f"Could not load Text-to-Video pipeline: {e}")
-                    pipe = {"placeholder": True, "name": "stable-video-diffusion"}
                 
             else:
-                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, kandinsky, stable-diffusion, stable-video-diffusion")
+                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, kandinsky, stable-diffusion")
             
             self.models[model_name] = pipe
             print(f"Successfully loaded model: {model_name}")
@@ -544,35 +495,6 @@ class VideoGenerator:
         except Exception as e:
             raise RuntimeError(f"Video generation failed: {e}")
     
-    def _create_svd_input_image(self, prompt: str) -> Image.Image:
-        """Create an input image for SVD based on the prompt"""
-        # Create a more sophisticated placeholder image
-        image = Image.new('RGB', (192, 192), color='white')
-        draw = ImageDraw.Draw(image)
-        
-        # Add gradient background
-        for y in range(192):
-            color_value = int(255 * (1 - y / 192))
-            draw.line([(0, y), (192, y)], fill=(color_value, color_value, 255))
-        
-        # Add text overlay
-        try:
-            # Try to use a better font if available
-            from PIL import ImageFont
-            font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 48)
-        except:
-            font = ImageFont.load_default()
-        
-        # Add prompt text
-        text = prompt[:50] + "..." if len(prompt) > 50 else prompt
-        draw.text((50, 50), f"SVD Input: {text}", fill='white', font=font)
-        
-        # Add some visual elements
-        draw.rectangle([50, 100, 974, 476], outline='white', width=3)
-        draw.text((100, 200), "Stable Video Diffusion", fill='white', font=font)
-        draw.text((100, 300), "Image-to-Video Generation", fill='white', font=font)
-        
-        return image
     
     async def _generate_placeholder(self, prompt: str, duration: int, output_format: str, palette=(56,189,248)) -> str:
         """Generate a lightweight placeholder video with animated gradient and prompt overlay.
@@ -642,10 +564,6 @@ class VideoGenerator:
         """Unload a model to free memory"""
         try:
             if model_name in self.models:
-                # Special handling for text-to-video pipeline
-                if model_name == "stable-video-diffusion" and self.text_to_video_pipeline:
-                    self.text_to_video_pipeline.unload_models()
-                    self.text_to_video_pipeline = None
                 
                 del self.models[model_name]
                 torch.cuda.empty_cache() if self.device != "cpu" else None
