@@ -350,26 +350,6 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Prompt Suggestions */}
-              <div className="flex flex-wrap gap-3">
-                {[
-                  'cinematic lighting',
-                  '4K quality',
-                  'smooth camera movement',
-                  'dramatic atmosphere',
-                  'highly detailed',
-                  'professional grade'
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => setPrompt(prev => prev ? `${prev}, ${suggestion}` : suggestion)}
-                    className="px-4 py-2 rounded-full border border-accent-blue/30 text-accent-blue hover:bg-accent-blue/10 hover:border-accent-blue/50 transition-all duration-200 hover:scale-105 text-sm font-medium"
-                  >
-                    + {suggestion}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Collapsible Settings Section */}
@@ -401,37 +381,8 @@ export default function Page() {
               {showSettings && (
                 <div className={`p-6 rounded-2xl border border-accent-blue/20 bg-white dark:bg-slate-800/30 backdrop-blur-md animate-slide-down`}>
                   <div className="space-y-6">
-                    {/* Optimal Settings Info */}
-                    <div className="p-4 rounded-xl bg-accent-blue/10 border border-accent-blue/20">
-                      <div className="flex items-start space-x-3">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-blue/20">
-                          <CheckCircle className="h-5 w-5 text-accent-blue" />
-                        </div>
-                        <div>
-                          <h4 className={`font-semibold ${colors.text.primary} mb-1`}>
-                            Optimized for Video Generation
-                          </h4>
-                          <p className={`text-sm ${colors.text.secondary}`}>
-                            Resolution: 576×1024 (optimal for video) • Duration: 4 seconds (best quality)
-                          </p>
-                        </div>
-                      </div>
-                    </div>
 
                     {/* Format Selection */}
-                    <div className="space-y-3">
-                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        AI Model
-                      </label>
-                      <select
-                        value={settings.model}
-                        onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
-                        className={`w-full px-4 py-4 bg-white dark:bg-slate-700/50 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-200 text-gray-900 dark:text-slate-100 font-medium`}
-                      >
-                        <option value="animatediff">AnimateDiff - Perfect for GIFs</option>
-                        <option value="kandinsky">Kandinsky - Artistic Images</option>
-                      </select>
-                    </div>
 
                     <div className="space-y-3">
                       <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
