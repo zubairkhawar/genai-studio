@@ -30,6 +30,9 @@ export default function Page() {
   });
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const colors = useThemeColors();
   
   // Check for existing job on mount
@@ -228,21 +231,49 @@ export default function Page() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'processing': return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
-      case 'queued': return <Clock className="h-5 w-5 text-yellow-500" />;
-      case 'failed': return <div className="h-5 w-5 rounded-full bg-red-500" />;
-      default: return <Clock className="h-5 w-5 text-gray-500" />;
+      case 'completed': 
+        return (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30">
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+          </div>
+        );
+      case 'processing': 
+        return (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30">
+            <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" />
+          </div>
+        );
+      case 'queued': 
+        return (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30">
+            <div className="relative">
+              <div className="w-4 h-4 border-2 border-purple-300 dark:border-purple-600 rounded-full animate-pulse"></div>
+              <div className="absolute top-0 left-0 w-4 h-4 border-2 border-transparent border-t-purple-600 dark:border-t-purple-400 rounded-full animate-spin"></div>
+            </div>
+          </div>
+        );
+      case 'failed': 
+        return (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30">
+            <div className="h-5 w-5 rounded-full bg-red-600 dark:bg-red-400" />
+          </div>
+        );
+      default: 
+        return (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800">
+            <Clock className="h-5 w-5 text-gray-500" />
+          </div>
+        );
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'completed': return 'Completed';
-      case 'processing': return 'Generating...';
-      case 'queued': return 'Queued';
-      case 'failed': return 'Failed';
-      default: return 'Unknown';
+      case 'completed': return 'Video Ready! 🎉';
+      case 'processing': return 'Creating Your Video...';
+      case 'queued': return 'Preparing Generation...';
+      case 'failed': return 'Generation Failed';
+      default: return 'Unknown Status';
     }
   };
 
@@ -408,7 +439,7 @@ export default function Page() {
             <div className="pt-4">
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim() || (generationMode === 'image-to-video' && !uploadedImage)}
+                disabled={!prompt.trim()}
                 className="group relative w-full flex items-center justify-center space-x-4 px-10 py-6 bg-gradient-to-r from-accent-blue to-accent-violet text-white rounded-2xl font-bold text-xl hover:from-accent-blue/90 hover:to-accent-violet/90 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-2xl hover:shadow-accent-blue/25"
               >
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-accent-blue to-accent-violet opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
@@ -457,18 +488,9 @@ export default function Page() {
             {/* Prompt Display */}
             <div className="text-left">
               <p className={`text-sm ${colors.text.secondary} mb-2`}>
-                {generationMode === 'text-to-video' ? 'Generating from text:' : 'Animating image:'}
+                Generating from text:
               </p>
               <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
-              {generationMode === 'image-to-video' && imagePreview && (
-                <div className="mt-3">
-                  <img
-                    src={imagePreview}
-                    alt="Source image"
-                    className="w-32 h-20 object-cover rounded-lg shadow-md"
-                  />
-                </div>
-              )}
             </div>
 
             {/* Status */}
@@ -478,44 +500,33 @@ export default function Page() {
             </div>
 
             {/* Progress Bar */}
-            <div className="space-y-2">
-              <div className="w-full bg-gray-200 rounded-full h-4">
-                <div 
-                  className="bg-gradient-to-r from-accent-blue to-accent-violet h-4 rounded-full transition-all duration-500"
-                  style={{ width: `${currentResult.progress}%` }}
-                ></div>
+            <div className="space-y-4">
+              <div className="relative">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-3 rounded-full transition-all duration-700 ease-out relative"
+                    style={{ width: `${currentResult.progress}%` }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {currentResult.progress}% complete
+                  </span>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {currentResult.status === 'processing' ? 'Generating frames...' : 
+                     currentResult.status === 'queued' ? 'Preparing...' : 'Processing...'}
+                  </span>
+                </div>
               </div>
-              <p className="text-lg font-medium">{currentResult.progress}% complete</p>
               {currentResult.message && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">{currentResult.message}</p>
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">{currentResult.message}</p>
+                </div>
               )}
             </div>
 
-            {/* Settings Display */}
-            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Resolution:</span>
-                  <p className="font-medium">576×1024 (Video Optimal)</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Duration:</span>
-                  <p className="font-medium">4s (Best Quality)</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Format:</span>
-                  <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Model:</span>
-                  <p className="font-medium">
-                    {settings.model === 'animatediff' ? 'AnimateDiff' :
-                     settings.model === 'kandinsky' ? 'Kandinsky 2.2' :
-                     settings.model}
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -529,11 +540,16 @@ export default function Page() {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent mb-2">
-            Video Generated!
-          </h1>
-          <p className={`text-lg ${colors.text.secondary}`}>
-            Your video is ready for download
+          <div className="flex items-center justify-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mr-4">
+              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 bg-clip-text text-transparent">
+              Video Generated!
+            </h1>
+          </div>
+          <p className={`text-xl ${colors.text.secondary} font-medium`}>
+            Your AI-generated video is ready for download
           </p>
         </div>
 
@@ -542,33 +558,42 @@ export default function Page() {
             {/* Prompt Display */}
             <div>
               <p className={`text-sm ${colors.text.secondary} mb-2`}>
-                {generationMode === 'text-to-video' ? 'Generated from text:' : 'Animated from image:'}
+                Generated from text:
               </p>
               <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
-              {generationMode === 'image-to-video' && imagePreview && (
-                <div className="mt-3">
-                  <p className={`text-sm ${colors.text.secondary} mb-2`}>Source image:</p>
-                  <img
-                    src={imagePreview}
-                    alt="Source image"
-                    className="w-32 h-20 object-cover rounded-lg shadow-md"
-                  />
-                </div>
-              )}
             </div>
 
               {/* Video Preview */}
             {currentResult.status === 'completed' && currentResult.outputFile && (
               <div className="text-center">
-                  <video 
-                    controls 
-                  className="w-full max-w-2xl rounded-lg shadow-lg mx-auto"
-                  src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
-                  >
-                    Your browser does not support the video tag.
-                  </video>
+                <div className="relative inline-block">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
+                  <div className="relative bg-white dark:bg-gray-800 p-2 rounded-2xl">
+                    <video 
+                      controls 
+                      preload="auto"
+                      className="w-full max-w-2xl rounded-xl shadow-2xl mx-auto"
+                      src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
+                      onLoadedMetadata={(e) => {
+                        console.log('Video metadata loaded:', {
+                          duration: e.currentTarget.duration,
+                          videoWidth: e.currentTarget.videoWidth,
+                          videoHeight: e.currentTarget.videoHeight
+                        });
+                      }}
+                      onCanPlay={(e) => {
+                        console.log('Video can play:', e.currentTarget.readyState);
+                      }}
+                      onError={(e) => {
+                        console.error('Video error:', e);
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
                 </div>
-              )}
+              </div>
+            )}
 
             {/* Error Display */}
             {currentResult.status === 'failed' && currentResult.error && (

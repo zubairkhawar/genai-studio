@@ -588,9 +588,16 @@ async def serve_voice_preview(filename: str):
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Voice preview file not found")
         
+        # Determine media type based on file extension
+        media_type = "audio/wav"
+        if filename.lower().endswith('.mp3'):
+            media_type = "audio/mpeg"
+        elif filename.lower().endswith('.wav'):
+            media_type = "audio/wav"
+        
         return FileResponse(
             path=str(file_path),
-            media_type="audio/wav",
+            media_type=media_type,
             filename=filename
         )
     except Exception as e:
