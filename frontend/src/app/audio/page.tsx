@@ -16,6 +16,7 @@ interface GenerationResult {
   settings: {
     format: string;
     voiceStyle: string;
+    sampleRate?: number;
   };
 }
 
@@ -308,6 +309,49 @@ export default function Page() {
     return () => clearInterval(interval);
     }
   }, [currentStep, currentJobId]);
+
+  // Check for existing job on mount
+  useEffect(() => {
+    const checkExistingJob = async () => {
+      try {
+        const response = await fetch(getApiUrl('/jobs'));
+        if (response.ok) {
+          const jobs = await response.json();
+          const activeJob = jobs.find((job: any) => 
+            job.model_type === 'audio' && (job.status === 'processing' || job.status === 'queued')
+          );
+          
+          if (activeJob) {
+            setCurrentJobId(activeJob.job_id);
+            setCurrentStep('progress');
+            setIsGenerating(true);
+            
+            // Add to results if not already there
+            const existingResult = results.find(r => r.id === activeJob.job_id);
+            if (!existingResult) {
+              const newResult: GenerationResult = {
+                id: activeJob.job_id,
+                prompt: activeJob.prompt || '',
+                status: activeJob.status === 'processing' ? 'processing' : 'queued',
+                progress: activeJob.progress || 0,
+                createdAt: activeJob.created_at,
+                settings: {
+                  sampleRate: activeJob.sample_rate || 22050,
+                  format: activeJob.output_format || 'wav',
+                  voiceStyle: activeJob.voice_style || 'auto'
+                }
+              };
+              setResults([newResult]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check existing jobs:', error);
+      }
+    };
+    
+    checkExistingJob();
+  }, []);
 
   useEffect(() => {
     fetchVoicePreviews();
@@ -756,14 +800,26 @@ export default function Page() {
             </div>
 
             {/* Progress Bar */}
-            <div className="space-y-2">
-              <div className="w-full bg-gray-200 rounded-full h-4">
-                <div 
-                  className="bg-gradient-to-r from-accent-violet to-accent-blue h-4 rounded-full transition-all duration-500"
-                  style={{ width: `${currentResult.progress}%` }}
-                ></div>
+            <div className="space-y-4">
+              <div className="relative">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-violet-500 via-purple-500 to-blue-500 h-3 rounded-full transition-all duration-700 ease-out relative"
+                    style={{ width: `${currentResult.progress}%` }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {currentResult.progress}% complete
+                  </span>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {currentResult.status === 'processing' ? 'Generating audio...' : 
+                     currentResult.status === 'queued' ? 'Preparing...' : 'Processing...'}
+                  </span>
+                </div>
               </div>
-              <p className="text-lg font-medium">{currentResult.progress}% complete</p>
             </div>
 
             {/* Settings Display */}
@@ -831,31 +887,68 @@ export default function Page() {
               {/* Audio Preview */}
             {currentResult.status === 'completed' && currentResult.outputFile && (
               <div className="text-center">
-                <div className="flex items-center justify-center space-x-4 p-6 rounded-lg bg-gray-50 dark:bg-gray-800 max-w-md mx-auto">
+                <div className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 p-8 rounded-2xl border border-violet-200 dark:border-violet-800 max-w-lg mx-auto">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🎵 Your Generated Audio</h3>
+                  
+                  <div className="flex items-center justify-center space-x-6 p-6 rounded-xl bg-white dark:bg-gray-800 shadow-lg">
                     <button
-                    onClick={() => toggleAudio(currentResult.id, getApiUrl(currentResult.outputFile!.replace('../outputs', '/outputs')))}
-                    className="flex items-center justify-center w-16 h-16 rounded-full bg-accent-violet text-white hover:bg-accent-violet/90 transition-colors"
+                      onClick={() => toggleAudio(currentResult.id, getApiUrl(currentResult.outputFile!.replace('../outputs', '/outputs')))}
+                      className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 text-white hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
                     >
-                    {playingAudio === currentResult.id ? (
-                      <Pause className="h-8 w-8" />
+                      {playingAudio === currentResult.id ? (
+                        <Pause className="h-10 w-10" />
                       ) : (
-                      <Play className="h-8 w-8 ml-1" />
+                        <Play className="h-10 w-10 ml-1" />
                       )}
                     </button>
-                    <div className="flex-1">
-                      <div className="w-full bg-gray-300 rounded-full h-2">
-                        <div className="bg-accent-violet h-2 rounded-full" style={{ width: '0%' }}></div>
+                    
+                    <div className="flex-1 space-y-3">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-violet-500 to-blue-500 h-3 rounded-full transition-all duration-300" 
+                          style={{ width: playingAudio === currentResult.id ? '100%' : '0%' }}
+                        ></div>
                       </div>
-                    <p className="text-sm text-gray-500 mt-2">Click to play audio preview</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {playingAudio === currentResult.id ? 'Playing...' : 'Click to play your audio'}
+                      </p>
                     </div>
                   </div>
+                  
+                  <div className="mt-4 flex justify-center space-x-3">
+                    <a
+                      href={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
+                      download
+                      className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </a>
+                  </div>
+                  
                   <audio
-                  id={`audio-${currentResult.id}`}
-                  src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
+                    id={`audio-${currentResult.id}`}
+                    src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
                     preload="metadata"
+                    onTimeUpdate={(e) => {
+                      const audio = e.target as HTMLAudioElement;
+                      const progress = (audio.currentTime / audio.duration) * 100;
+                      const progressBar = document.querySelector(`#audio-${currentResult.id} + div .bg-gradient-to-r`) as HTMLElement;
+                      if (progressBar) {
+                        progressBar.style.width = `${progress}%`;
+                      }
+                    }}
+                    onEnded={() => {
+                      setPlayingAudio(null);
+                      const progressBar = document.querySelector(`#audio-${currentResult.id} + div .bg-gradient-to-r`) as HTMLElement;
+                      if (progressBar) {
+                        progressBar.style.width = '0%';
+                      }
+                    }}
                   />
                 </div>
-              )}
+              </div>
+            )}
 
             {/* Error Display */}
             {currentResult.status === 'failed' && currentResult.error && (
@@ -939,5 +1032,6 @@ export default function Page() {
     </div>
   );
 }
+
 
 
