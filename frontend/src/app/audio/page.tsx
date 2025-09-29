@@ -325,10 +325,10 @@ export default function Page() {
               {/* Voice Options */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
                 {barkVoices.map((voice) => (
-                  <button
+                  <div
                               key={voice.id}
                     onClick={() => handleVoiceSelect(voice.id)}
-                    className={`p-3 rounded-lg border text-left transition-all duration-200 ${
+                    className={`p-3 rounded-lg border text-left transition-all duration-200 cursor-pointer ${
                                 settings.voiceId === voice.id
                         ? 'border-accent-violet bg-accent-violet/10 text-accent-violet'
                         : 'border-gray-200 dark:border-gray-600 hover:border-accent-violet/50 hover:bg-accent-violet/5'
@@ -358,7 +358,7 @@ export default function Page() {
                                 )}
                               </button>
                             </div>
-                  </button>
+                  </div>
                 ))}
                       </div>
                             </div>
