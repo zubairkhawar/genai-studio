@@ -37,7 +37,7 @@ export function GeneratingProvider({ children }: { children: ReactNode }) {
       isGenerating: true,
       currentJobId: jobId,
       progress: 0,
-      currentStep: 'Starting generation...',
+      currentStep: 'Generating...',
       type,
       title,
       description

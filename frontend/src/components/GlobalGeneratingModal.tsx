@@ -47,16 +47,9 @@ export function GlobalGeneratingModal() {
     if (showSuccess) return <CheckCircle className="h-8 w-8 text-green-500" />;
     if (isCompleted && !showSuccess) return <AlertCircle className="h-8 w-8 text-red-500" />;
     
-    switch (generatingState.type) {
-      case 'image':
-        return <ImageIcon className="h-8 w-8 text-accent-blue" />;
-      case 'video':
-        return <Video className="h-8 w-8 text-accent-violet" />;
-      case 'audio':
-        return <Volume2 className="h-8 w-8 text-accent-green" />;
-      default:
-        return <Loader2 className="h-8 w-8 text-accent-blue animate-spin" />;
-    }
+    // Always show spinning loader when generating with appropriate color
+    const colorClass = getStatusColor();
+    return <Loader2 className={`h-8 w-8 animate-spin ${colorClass}`} />;
   };
 
   const getStatusColor = () => {
@@ -109,7 +102,20 @@ export function GlobalGeneratingModal() {
           {!isCompleted && (
             <div className="flex items-center justify-center mb-4">
               <div className="relative w-24 h-24">
-                <div className="w-24 h-24 border-4 border-gray-200 dark:border-slate-600 border-t-accent-blue rounded-full animate-spin"></div>
+                <div className={`w-24 h-24 border-4 border-gray-200 dark:border-slate-600 rounded-full animate-spin ${
+                  generatingState.type === 'image' ? 'border-t-accent-blue' :
+                  generatingState.type === 'video' ? 'border-t-accent-violet' :
+                  generatingState.type === 'audio' ? 'border-t-accent-green' :
+                  'border-t-accent-blue'
+                }`}></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className={`w-8 h-8 rounded-full animate-pulse ${
+                    generatingState.type === 'image' ? 'bg-accent-blue/20' :
+                    generatingState.type === 'video' ? 'bg-accent-violet/20' :
+                    generatingState.type === 'audio' ? 'bg-accent-green/20' :
+                    'bg-accent-blue/20'
+                  }`}></div>
+                </div>
               </div>
             </div>
           )}
@@ -158,7 +164,10 @@ export function GlobalGeneratingModal() {
         {/* Note */}
         <div className="text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Please wait while your {generatingState.type} is being generated...
+            {!isCompleted ? 
+              `Generating your ${generatingState.type}...` : 
+              `Your ${generatingState.type} generation is complete!`
+            }
           </p>
         </div>
       </div>
