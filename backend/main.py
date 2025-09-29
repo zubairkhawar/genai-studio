@@ -116,6 +116,15 @@ class GenerationRequest(BaseModel):
     output_format: str = "mp4"  # mp4, wav, mp3
     voice_style: Optional[str] = "auto"  # for audio voice selection
     voice_id: Optional[str] = None  # specific Bark voice ID
+    # Advanced video settings
+    width: Optional[int] = None
+    height: Optional[int] = None
+    num_frames: Optional[int] = None
+    num_inference_steps: Optional[int] = None
+    guidance_scale: Optional[float] = None
+    motion_scale: Optional[float] = None
+    fps: Optional[int] = None
+    seed: Optional[int] = None
 
 class GenerationResponse(BaseModel):
     job_id: str
@@ -793,7 +802,7 @@ async def generate_media(request: GenerationRequest, background_tasks: Backgroun
             raise HTTPException(status_code=400, detail="model_type must be 'video', 'audio' or 'image'")
         
         # Add job to queue
-        job_queue.add_job(job_id, {
+        job_data = {
             "prompt": request.prompt,
             "model_type": request.model_type,
             "model_name": request.model_name,
@@ -801,7 +810,28 @@ async def generate_media(request: GenerationRequest, background_tasks: Backgroun
             "sample_rate": request.sample_rate,
             "output_format": request.output_format,
             "created_at": datetime.now().isoformat()
-        })
+        }
+        
+        # Add advanced video settings if provided
+        if request.model_type == "video":
+            if request.width is not None:
+                job_data["width"] = request.width
+            if request.height is not None:
+                job_data["height"] = request.height
+            if request.num_frames is not None:
+                job_data["num_frames"] = request.num_frames
+            if request.num_inference_steps is not None:
+                job_data["num_inference_steps"] = request.num_inference_steps
+            if request.guidance_scale is not None:
+                job_data["guidance_scale"] = request.guidance_scale
+            if request.motion_scale is not None:
+                job_data["motion_scale"] = request.motion_scale
+            if request.fps is not None:
+                job_data["fps"] = request.fps
+            if request.seed is not None:
+                job_data["seed"] = request.seed
+        
+        job_queue.add_job(job_id, job_data)
         
         # Start background generation
         if request.model_type == "video":
@@ -1812,13 +1842,34 @@ async def generate_video(job_id: str, request: GenerationRequest):
         def progress_callback(progress: int, message: str = ""):
             job_queue.update_job(job_id, {"progress": progress, "message": message})
         
-        output_path = await video_generator.generate(
-            prompt=request.prompt,
-            model_name=request.model_name,
-            duration=request.duration,
-            output_format=request.output_format,
-            progress_callback=progress_callback
-        )
+        # Prepare generation parameters
+        generation_params = {
+            "prompt": request.prompt,
+            "model_name": request.model_name,
+            "duration": request.duration,
+            "output_format": request.output_format,
+            "progress_callback": progress_callback
+        }
+        
+        # Add advanced settings if provided
+        if request.width is not None:
+            generation_params["width"] = request.width
+        if request.height is not None:
+            generation_params["height"] = request.height
+        if request.num_frames is not None:
+            generation_params["num_frames"] = request.num_frames
+        if request.num_inference_steps is not None:
+            generation_params["num_inference_steps"] = request.num_inference_steps
+        if request.guidance_scale is not None:
+            generation_params["guidance_scale"] = request.guidance_scale
+        if request.motion_scale is not None:
+            generation_params["motion_scale"] = request.motion_scale
+        if request.fps is not None:
+            generation_params["fps"] = request.fps
+        if request.seed is not None:
+            generation_params["seed"] = request.seed
+        
+        output_path = await video_generator.generate(**generation_params)
         
         job_queue.update_job(job_id, {
             "status": "completed",

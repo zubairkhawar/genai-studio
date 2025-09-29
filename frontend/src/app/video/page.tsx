@@ -1,201 +1,169 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2, Type } from 'lucide-react';
+import { Play, Settings, Loader2, Type, Upload, X, Monitor, Zap, Clock, Target, RotateCcw } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useGenerating } from '@/contexts/GeneratingContext';
 import { getApiUrl } from '@/config';
-
-interface GenerationResult {
-  id: string;
-  prompt: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
-  progress: number;
-  outputFile?: string;
-  error?: string;
-  message?: string;
-  createdAt: string;
-  settings: {
-    format: string;
-  };
-}
 
 export default function Page() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [results, setResults] = useState<GenerationResult[]>([]);
-  const [currentStep, setCurrentStep] = useState<'prompt' | 'progress' | 'results'>('prompt');
   const [settings, setSettings] = useState({
     format: 'mp4',
-    model: 'animatediff'  // Default to AnimateDiff for GIF generation
+    model: 'animatediff',
+    // Advanced settings
+    width: 512,
+    height: 512,
+    numFrames: 24,
+    numInferenceSteps: 30,
+    guidanceScale: 7.5,
+    motionScale: 1.5,
+    fps: 8,
+    seed: 42
   });
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const colors = useThemeColors();
-  
-  // Check for existing job on mount
-  useEffect(() => {
-    const checkExistingJob = async () => {
-      try {
-        const response = await fetch(getApiUrl('/jobs'));
-        if (response.ok) {
-          const jobs = await response.json();
-          const activeJob = jobs.find((job: any) => 
-            job.status === 'processing' || job.status === 'queued'
-          );
-          
-          if (activeJob) {
-            setCurrentJobId(activeJob.job_id);
-            setCurrentStep('progress');
-            setIsGenerating(true);
-            
-            // Add to results if not already there
-            const existingResult = results.find(r => r.id === activeJob.job_id);
-            if (!existingResult) {
-              const newResult: GenerationResult = {
-                id: activeJob.job_id,
-                prompt: activeJob.prompt || '',
-                status: activeJob.status === 'processing' ? 'processing' : 'queued',
-                progress: activeJob.progress || 0,
-                createdAt: activeJob.created_at,
-                settings
-              };
-              setResults([newResult]);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to check existing jobs:', error);
-      }
-    };
-    
-    checkExistingJob();
-  }, []);
-  
-  // Poll for job updates when there's an active job
-  useEffect(() => {
-    if (!currentJobId) return;
-    
-    const pollJobStatus = async () => {
-      try {
-        const response = await fetch(getApiUrl('/jobs'));
-        if (response.ok) {
-          const jobs = await response.json();
-          const currentJob = jobs.find((job: any) => job.job_id === currentJobId);
-          
-          if (currentJob) {
-            setResults(prev => prev.map(result => 
-              result.id === currentJobId 
-                ? {
-                    ...result,
-                    status: currentJob.status === 'completed' ? 'completed' : 
-                           currentJob.status === 'failed' ? 'failed' : 
-                           currentJob.status === 'processing' ? 'processing' : 'queued',
-                    progress: currentJob.progress || 0,
-                    outputFile: currentJob.output_file,
-                    error: currentJob.error,
-                    message: currentJob.message
-                  }
-                : result
-            ));
-            
-            // Update step based on status
-            if (currentJob.status === 'completed') {
-              setCurrentStep('results');
-              setIsGenerating(false);
-            } else if (currentJob.status === 'failed') {
-              setCurrentStep('results');
-              setIsGenerating(false);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to poll job status:', error);
-      }
-    };
-    
-    const interval = setInterval(pollJobStatus, 2000);
-    return () => clearInterval(interval);
-  }, [currentJobId]);
+  const { startGenerating, stopGenerating } = useGenerating();
 
-
-  const fetchJobs = async () => {
-    if (currentStep !== 'progress' && currentStep !== 'results') return;
-    
-    try {
-      const response = await fetch(getApiUrl('/jobs'));
-      const jobs = await response.json();
-      
-      // Filter for video jobs and convert to our format
-      const videoJobs = jobs
-        .filter((job: any) => job.model_type === 'video')
-        .map((job: any) => ({
-          id: job.job_id,
-          prompt: job.prompt,
-          status: job.status,
-          progress: job.progress || 0,
-          outputFile: job.output_file,
-          error: job.error,
-          createdAt: job.created_at,
-          settings: {
-            resolution: '1024x576', // Default, could be enhanced
-            duration: job.duration || 4,
-            format: job.output_format || 'mp4'
-          }
-        }))
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
-      // Find current job or most recent
-      const currentJob = currentJobId 
-        ? videoJobs.find((job: any) => job.id === currentJobId)
-        : videoJobs[0];
-      
-      if (currentJob) {
-        setResults([currentJob]);
-        
-        // Check if job is completed and move to results step
-        if (currentJob.status === 'completed' && currentStep === 'progress') {
-          setCurrentStep('results');
-          setIsGenerating(false);
-        }
-        
-        // Check if job failed and move to results step
-        if (currentJob.status === 'failed' && currentStep === 'progress') {
-          setCurrentStep('results');
-          setIsGenerating(false);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch jobs:', error);
+  // Preset configurations for different hardware
+  const presets = {
+    'ultra-fast': {
+      name: 'Ultra Fast',
+      description: 'Quick generation, basic quality',
+      width: 256,
+      height: 256,
+      numFrames: 8,
+      numInferenceSteps: 15,
+      guidanceScale: 7.0,
+      motionScale: 1.2,
+      fps: 6,
+      estimatedTime: '30-60s'
+    },
+    'balanced': {
+      name: 'Balanced',
+      description: 'Good quality, reasonable speed',
+      width: 384,
+      height: 384,
+      numFrames: 16,
+      numInferenceSteps: 25,
+      guidanceScale: 7.5,
+      motionScale: 1.4,
+      fps: 8,
+      estimatedTime: '1-2min'
+    },
+    'high-quality': {
+      name: 'High Quality',
+      description: 'Great quality, longer generation',
+      width: 512,
+      height: 512,
+      numFrames: 24,
+      numInferenceSteps: 30,
+      guidanceScale: 7.5,
+      motionScale: 1.5,
+      fps: 8,
+      estimatedTime: '2-4min'
+    },
+    'ultra-quality': {
+      name: 'Ultra Quality',
+      description: 'Maximum quality, requires high-end GPU',
+      width: 768,
+      height: 768,
+      numFrames: 32,
+      numInferenceSteps: 40,
+      guidanceScale: 8.0,
+      motionScale: 1.6,
+      fps: 8,
+      estimatedTime: '5-10min'
     }
   };
 
-  useEffect(() => {
-    if (currentStep === 'progress' || currentStep === 'results') {
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 2000);
-    return () => clearInterval(interval);
+  const applyPreset = (presetKey: keyof typeof presets) => {
+    const preset = presets[presetKey];
+    setSettings(prev => ({
+      ...prev,
+      width: preset.width,
+      height: preset.height,
+      numFrames: preset.numFrames,
+      numInferenceSteps: preset.numInferenceSteps,
+      guidanceScale: preset.guidanceScale,
+      motionScale: preset.motionScale,
+      fps: preset.fps
+    }));
+  };
+
+  const resetToDefaults = () => {
+    setSettings(prev => ({
+      ...prev,
+      width: 512,
+      height: 512,
+      numFrames: 24,
+      numInferenceSteps: 30,
+      guidanceScale: 7.5,
+      motionScale: 1.5,
+      fps: 8,
+      seed: 42
+    }));
+  };
+
+  const calculateVideoDuration = () => {
+    return (settings.numFrames / settings.fps).toFixed(1);
+  };
+
+  const estimateFileSize = () => {
+    const pixels = settings.width * settings.height;
+    const frames = settings.numFrames;
+    // Rough estimation: ~0.5-1KB per pixel per frame
+    const estimatedKB = (pixels * frames * 0.75) / 1024;
+    if (estimatedKB < 1024) {
+      return `${estimatedKB.toFixed(0)} KB`;
+    } else {
+      return `${(estimatedKB / 1024).toFixed(1)} MB`;
     }
-  }, [currentStep, currentJobId]);
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setUploadedImage(null);
+    setImagePreview(null);
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
     setIsGenerating(true);
-    setCurrentStep('progress');
-    
-    // Clear previous results when starting new generation
-    setResults([]);
     
     try {
       const requestData = {
         prompt: prompt.trim(),
         model_type: 'video',
         model_name: settings.model,
-        duration: 4, // Optimal duration for video generation
-        output_format: settings.format
+        duration: parseInt(calculateVideoDuration()),
+        output_format: settings.format,
+        // Advanced settings
+        width: settings.width,
+        height: settings.height,
+        num_frames: settings.numFrames,
+        num_inference_steps: settings.numInferenceSteps,
+        guidance_scale: settings.guidanceScale,
+        motion_scale: settings.motionScale,
+        fps: settings.fps,
+        seed: settings.seed
       };
       
       const response = await fetch(getApiUrl('/generate'), {
@@ -209,226 +177,384 @@ export default function Page() {
       const result = await response.json();
       
       if (result.job_id) {
-        setCurrentJobId(result.job_id);
-        
-        // Add to results immediately
-        const newResult: GenerationResult = {
-          id: result.job_id,
-          prompt: prompt.trim(),
-          status: 'queued',
-          progress: 0,
-          createdAt: new Date().toISOString(),
-          settings
-        };
-        setResults([newResult]);
+        // Start global generating modal
+        startGenerating(
+          result.job_id,
+          'video',
+          'Generating Video',
+          'Your video is being created from text'
+        );
       }
     } catch (error) {
       console.error('Generation failed:', error);
       setIsGenerating(false);
-      setCurrentStep('prompt');
+      stopGenerating();
     }
   };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': 
-        return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30">
-            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-          </div>
-        );
-      case 'processing': 
-        return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30">
-            <Loader2 className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" />
-          </div>
-        );
-      case 'queued': 
-        return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30">
-            <div className="relative">
-              <div className="w-4 h-4 border-2 border-purple-300 dark:border-purple-600 rounded-full animate-pulse"></div>
-              <div className="absolute top-0 left-0 w-4 h-4 border-2 border-transparent border-t-purple-600 dark:border-t-purple-400 rounded-full animate-spin"></div>
-            </div>
-          </div>
-        );
-      case 'failed': 
-        return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30">
-            <div className="h-5 w-5 rounded-full bg-red-600 dark:bg-red-400" />
-          </div>
-        );
-      default: 
-        return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800">
-            <Clock className="h-5 w-5 text-gray-500" />
-          </div>
-        );
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return 'Video Ready! 🎉';
-      case 'processing': return 'Creating Your Video...';
-      case 'queued': return 'Preparing Generation...';
-      case 'failed': return 'Generation Failed';
-      default: return 'Unknown Status';
-    }
-  };
-
-  const renderStepIndicator = () => {
-    const steps = [
-      { key: 'prompt', label: 'Prompt & Settings', icon: Play },
-      { key: 'progress', label: 'Generating', icon: Loader2 },
-      { key: 'results', label: 'Results', icon: CheckCircle }
-    ];
 
   return (
-      <div className="flex items-center justify-center mb-8">
-        <div className="flex items-center space-x-4">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
-            const isActive = currentStep === step.key;
-            const isCompleted = (currentStep === 'progress' && step.key === 'prompt') || 
-                               (currentStep === 'results' && (step.key === 'prompt' || step.key === 'progress'));
-            
-            return (
-              <div key={step.key} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300 ${
-                  isActive 
-                    ? 'border-accent-blue bg-accent-blue text-white' 
-                    : isCompleted 
-                      ? 'border-green-500 bg-green-500 text-white'
-                      : 'border-gray-300 bg-white text-gray-400'
-                }`}>
-                  {isCompleted && step.key !== 'results' ? (
-                    <CheckCircle className="h-5 w-5" />
-                  ) : (
-                    <Icon className={`h-5 w-5 ${isActive && step.key === 'progress' ? 'animate-spin' : ''}`} />
-                  )}
-                </div>
-                <span className={`ml-2 text-sm font-medium ${
-                  isActive ? 'text-accent-blue' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                }`}>
-                  {step.label}
-                </span>
-                {index < steps.length - 1 && (
-                  <div className={`w-8 h-0.5 mx-4 ${
-                    isCompleted ? 'bg-green-500' : 'bg-gray-300'
-                  }`} />
-                )}
-              </div>
-            );
-          })}
-                </div>
-                </div>
-    );
-  };
-
-  const renderPromptStep = () => (
-    <div className="max-w-5xl mx-auto">
-      {/* Hero Section */}
-      <div className="text-center mb-12">
-        <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-accent-blue to-accent-violet mb-6 shadow-2xl">
-          <Play className="h-10 w-10 text-white" />
+    <div className="space-y-8">
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-accent-blue to-accent-violet mb-4 shadow-2xl">
+          <Play className="h-8 w-8 text-white" />
         </div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent mb-4">
-            Video Generator
-          </h1>
-        <p className={`text-xl ${colors.text.secondary} max-w-2xl mx-auto leading-relaxed`}>
-          Transform your ideas into stunning videos with the power of AI. Describe your vision and watch it come to life.
-        </p>
+        <h1 className="text-3xl font-bold bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent">Video Generator</h1>
+        <p className={`mt-1 ${colors.text.secondary}`}>Generate high-quality videos from text prompts using AI</p>
       </div>
 
-      {/* Main Content Card */}
-      <div className={`relative overflow-hidden rounded-3xl border shadow-2xl bg-white dark:bg-gradient-to-br dark:from-slate-900/90 dark:to-slate-800/50 backdrop-blur-md dark:border-slate-700/50`}>
-        {/* Decorative Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-accent-blue/5 via-transparent to-accent-violet/5 dark:from-accent-blue/10 dark:via-transparent dark:to-accent-violet/10"></div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-accent-blue/10 to-transparent dark:from-accent-blue/20 rounded-full -translate-y-32 translate-x-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-accent-violet/10 to-transparent dark:from-accent-violet/20 rounded-full translate-y-24 -translate-x-24"></div>
-        
-        <div className="relative p-10">
-          <div className="space-y-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Generation Mode Toggle */}
+        <div className="flex justify-center">
+          <div className="bg-gray-100 dark:bg-slate-700 rounded-xl p-1">
+            <button
+              onClick={() => setGenerationMode('text-to-video')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                generationMode === 'text-to-video'
+                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Type className="h-4 w-4 inline mr-2" />
+              Text to Video
+            </button>
+            <button
+              onClick={() => setGenerationMode('image-to-video')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                generationMode === 'image-to-video'
+                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Upload className="h-4 w-4 inline mr-2" />
+              Image to Video
+            </button>
+          </div>
+        </div>
 
-            {/* Prompt Section */}
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-blue/10">
-                  <Type className="h-5 w-5 text-accent-blue" />
-                </div>
-                <h2 className={`text-2xl font-bold ${colors.text.primary}`}>
-                  Describe Your Video
-                </h2>
-              </div>
-
-              <div className="relative">
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="A cinematic shot of a futuristic city at sunset, with flying cars and neon lights reflecting on glass buildings..."
-                  className={`w-full px-6 py-6 bg-white dark:bg-slate-800/50 border-2 border-gray-200 dark:border-slate-600 rounded-2xl shadow-lg focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-300 text-gray-900 dark:text-slate-100 hover:border-accent-blue/50 hover:shadow-xl resize-none text-lg leading-relaxed`}
-                  rows={5}
-                />
-                <div className="absolute bottom-4 right-4 flex items-center space-x-4">
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    prompt.length > 200 ? 'bg-accent-green/10 text-accent-green' : 
-                    prompt.length > 100 ? 'bg-accent-blue/10 text-accent-blue' : 
-                    'bg-gray-100 text-gray-500'
-                  }`}>
-                    {prompt.length} characters
-                </div>
-                </div>
-              </div>
-
+        {/* Main Generation Form */}
+        <div className="bg-white dark:bg-slate-800/50 rounded-2xl border p-8">
+          <div className="space-y-6">
+            {/* Prompt Input */}
+            <div>
+              <label className="block text-sm font-semibold mb-3 text-gray-900 dark:text-white">
+                {generationMode === 'text-to-video' ? 'Text Prompt' : 'Video Description'}
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={4}
+                placeholder={generationMode === 'text-to-video' 
+                  ? "Describe the video you want to generate..." 
+                  : "Describe how you want the image to animate..."}
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-accent-blue focus:border-transparent transition-all duration-200"
+              />
             </div>
 
-            {/* Collapsible Settings Section */}
-            <div className="space-y-4">
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center justify-between w-full p-4 rounded-2xl border border-accent-blue/20 bg-accent-blue/5 dark:bg-accent-blue/10 hover:bg-accent-blue/10 dark:hover:bg-accent-blue/20 transition-all duration-300 group"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-accent-blue/10 group-hover:bg-accent-blue/20 transition-colors">
-                    <Settings className="h-5 w-5 text-accent-blue" />
+            {/* Image Upload for Image-to-Video */}
+            {generationMode === 'image-to-video' && (
+              <div>
+                <label className="block text-sm font-semibold mb-3 text-gray-900 dark:text-white">
+                  Upload Image
+                </label>
+                {!imagePreview ? (
+                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center hover:border-accent-blue transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="image-upload"
+                    />
+                    <label
+                      htmlFor="image-upload"
+                      className="cursor-pointer flex flex-col items-center space-y-2"
+                    >
+                      <Upload className="h-8 w-8 text-gray-400" />
+                      <span className="text-gray-600 dark:text-gray-400">
+                        Click to upload an image or drag and drop
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        PNG, JPG, GIF up to 10MB
+                      </span>
+                    </label>
                   </div>
-                  <div className="text-left">
-                    <h3 className={`text-xl font-bold ${colors.text.primary}`}>
-                      Video Settings
-                    </h3>
-                    <p className={`text-sm ${colors.text.secondary}`}>
-                      Optimized settings for best quality
-                    </p>
+                ) : (
+                  <div className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Uploaded"
+                      className="w-full max-w-md mx-auto rounded-xl shadow-lg"
+                    />
+                    <button
+                      onClick={removeImage}
+                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Settings */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-semibold text-gray-900 dark:text-white">
+                  Generation Settings
+                </label>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                    className="flex items-center space-x-2 px-3 py-1 text-sm text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors"
+                  >
+                    <Settings className="h-4 w-4" />
+                    <span>{showAdvancedSettings ? 'Hide' : 'Advanced'} Settings</span>
+                  </button>
+                  <button
+                    onClick={resetToDefaults}
+                    className="flex items-center space-x-2 px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    <span>Reset</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Basic Settings */}
+              <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-xl border mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Model
+                    </label>
+                    <select
+                      value={settings.model}
+                      onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                    >
+                      <option value="animatediff">AnimateDiff</option>
+                      <option value="stable-video-diffusion">Stable Video Diffusion</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Output Format
+                    </label>
+                    <select
+                      value={settings.format}
+                      onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                    >
+                      <option value="mp4">MP4 (Recommended)</option>
+                      <option value="gif">GIF</option>
+                    </select>
                   </div>
                 </div>
-                <div className={`transform transition-transform duration-300 ${showSettings ? 'rotate-180' : ''}`}>
-                  <svg className="h-6 w-6 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+              </div>
+
+              {/* Preset Configurations */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Quick Presets
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {Object.entries(presets).map(([key, preset]) => (
+                    <button
+                      key={key}
+                      onClick={() => applyPreset(key as keyof typeof presets)}
+                      className="p-3 text-left border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 hover:border-accent-blue hover:bg-accent-blue/5 transition-colors"
+                    >
+                      <div className="font-medium text-sm text-gray-900 dark:text-white">{preset.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{preset.description}</div>
+                      <div className="text-xs text-accent-blue mt-1">{preset.estimatedTime}</div>
+                    </button>
+                  ))}
                 </div>
-              </button>
-              
-              {showSettings && (
-                <div className={`p-6 rounded-2xl border border-accent-blue/20 bg-white dark:bg-slate-800/30 backdrop-blur-md animate-slide-down`}>
+              </div>
+
+              {/* Advanced Settings */}
+              {showAdvancedSettings && (
+                <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-xl border">
                   <div className="space-y-6">
+                    {/* Video Info Display */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-white dark:bg-slate-800 rounded-lg border">
+                      <div className="text-center">
+                        <Monitor className="h-5 w-5 mx-auto text-accent-blue mb-1" />
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{settings.width}×{settings.height}</div>
+                        <div className="text-xs text-gray-500">Resolution</div>
+                      </div>
+                      <div className="text-center">
+                        <Clock className="h-5 w-5 mx-auto text-accent-blue mb-1" />
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{calculateVideoDuration()}s</div>
+                        <div className="text-xs text-gray-500">Duration</div>
+                      </div>
+                      <div className="text-center">
+                        <Zap className="h-5 w-5 mx-auto text-accent-blue mb-1" />
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{settings.numFrames}</div>
+                        <div className="text-xs text-gray-500">Frames</div>
+                      </div>
+                      <div className="text-center">
+                        <Target className="h-5 w-5 mx-auto text-accent-blue mb-1" />
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{estimateFileSize()}</div>
+                        <div className="text-xs text-gray-500">Est. Size</div>
+                      </div>
+                    </div>
 
-                    {/* Format Selection */}
-
-                    <div className="space-y-3">
-                      <label className={`block text-sm font-semibold ${colors.text.primary} uppercase tracking-wide`}>
-                        Output Format
+                    {/* Resolution Settings */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Resolution
                       </label>
-                      <select
-                        value={settings.format}
-                        onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
-                        className={`w-full px-4 py-4 bg-white dark:bg-slate-700/50 border-2 border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-4 focus:ring-accent-blue/20 focus:border-accent-blue transition-all duration-200 text-gray-900 dark:text-slate-100 font-medium`}
-                      >
-                        <option value="gif">GIF (AnimateDiff - Recommended)</option>
-                        <option value="mp4">MP4 (Universal)</option>
-                        <option value="webm">WebM (Web optimized)</option>
-                        <option value="mov">MOV (QuickTime)</option>
-                      </select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Width</label>
+                          <select
+                            value={settings.width}
+                            onChange={(e) => setSettings(prev => ({ ...prev, width: parseInt(e.target.value) }))}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                          >
+                            <option value={256}>256px</option>
+                            <option value={384}>384px</option>
+                            <option value={512}>512px</option>
+                            <option value={768}>768px</option>
+                            <option value={1024}>1024px</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Height</label>
+                          <select
+                            value={settings.height}
+                            onChange={(e) => setSettings(prev => ({ ...prev, height: parseInt(e.target.value) }))}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                          >
+                            <option value={256}>256px</option>
+                            <option value={384}>384px</option>
+                            <option value={512}>512px</option>
+                            <option value={768}>768px</option>
+                            <option value={1024}>1024px</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Video Settings */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Frames: {settings.numFrames} ({calculateVideoDuration()}s)
+                        </label>
+                        <input
+                          type="range"
+                          min="4"
+                          max="48"
+                          step="4"
+                          value={settings.numFrames}
+                          onChange={(e) => setSettings(prev => ({ ...prev, numFrames: parseInt(e.target.value) }))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>4 (0.5s)</span>
+                          <span>48 (6s)</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Frame Rate: {settings.fps} FPS
+                        </label>
+                        <select
+                          value={settings.fps}
+                          onChange={(e) => setSettings(prev => ({ ...prev, fps: parseInt(e.target.value) }))}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                        >
+                          <option value={6}>6 FPS (Cinematic)</option>
+                          <option value={8}>8 FPS (Standard)</option>
+                          <option value={12}>12 FPS (Smooth)</option>
+                          <option value={24}>24 FPS (Very Smooth)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Quality Settings */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Inference Steps: {settings.numInferenceSteps}
+                        </label>
+                        <input
+                          type="range"
+                          min="10"
+                          max="50"
+                          step="5"
+                          value={settings.numInferenceSteps}
+                          onChange={(e) => setSettings(prev => ({ ...prev, numInferenceSteps: parseInt(e.target.value) }))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>10 (Fast)</span>
+                          <span>50 (Ultra)</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Guidance Scale: {settings.guidanceScale}
+                        </label>
+                        <input
+                          type="range"
+                          min="5.0"
+                          max="12.0"
+                          step="0.5"
+                          value={settings.guidanceScale}
+                          onChange={(e) => setSettings(prev => ({ ...prev, guidanceScale: parseFloat(e.target.value) }))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>5.0 (Creative)</span>
+                          <span>12.0 (Strict)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Motion and Seed Settings */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Motion Scale: {settings.motionScale}
+                        </label>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.5"
+                          step="0.1"
+                          value={settings.motionScale}
+                          onChange={(e) => setSettings(prev => ({ ...prev, motionScale: parseFloat(e.target.value) }))}
+                          className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>0.5 (Subtle)</span>
+                          <span>2.5 (Dynamic)</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Seed: {settings.seed}
+                        </label>
+                        <div className="flex space-x-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="1000000"
+                            value={settings.seed}
+                            onChange={(e) => setSettings(prev => ({ ...prev, seed: parseInt(e.target.value) || 42 }))}
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
+                          />
+                          <button
+                            onClick={() => setSettings(prev => ({ ...prev, seed: Math.floor(Math.random() * 1000000) }))}
+                            className="px-3 py-2 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/90 transition-colors"
+                          >
+                            Random
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -439,235 +565,18 @@ export default function Page() {
             <div className="pt-4">
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim()}
+                disabled={!prompt.trim() || (generationMode === 'image-to-video' && !uploadedImage)}
                 className="group relative w-full flex items-center justify-center space-x-4 px-10 py-6 bg-gradient-to-r from-accent-blue to-accent-violet text-white rounded-2xl font-bold text-xl hover:from-accent-blue/90 hover:to-accent-violet/90 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-2xl hover:shadow-accent-blue/25"
               >
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-accent-blue to-accent-violet opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
                 <Play className="h-7 w-7 group-hover:scale-110 transition-transform duration-300" />
-                <span>
-                  Generate Video from Text
-                </span>
+                <span>Generate Video</span>
                 <div className="absolute inset-0 rounded-2xl border-2 border-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               </button>
-              
-              {/* Reset Button */}
-              <div className="mt-4 text-center">
-                <button
-                  onClick={() => {
-                    setPrompt('');
-                  }}
-                  className="px-6 py-2 text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors text-sm font-medium"
-                >
-                  Reset Form
-                </button>
-              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-
-  const renderProgressStep = () => {
-    const currentResult = results[0];
-    if (!currentResult) return null;
-
-    return (
-      <div className="max-w-2xl mx-auto text-center">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-accent-blue to-accent-violet bg-clip-text text-transparent mb-2">
-            Generating Your Video
-          </h1>
-          <p className={`text-lg ${colors.text.secondary}`}>
-            Please wait while we create your video...
-          </p>
-        </div>
-
-        <div className={`p-8 rounded-2xl border shadow-xl bg-white dark:bg-gradient-to-br dark:from-dark-card/90 dark:to-dark-bg-secondary/50 backdrop-blur-md`}>
-          <div className="space-y-6">
-            {/* Prompt Display */}
-            <div className="text-left">
-              <p className={`text-sm ${colors.text.secondary} mb-2`}>
-                Generating from text:
-              </p>
-              <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
-            </div>
-
-            {/* Status */}
-            <div className="flex items-center justify-center space-x-3">
-              {getStatusIcon(currentResult.status)}
-              <span className="text-xl font-medium">{getStatusText(currentResult.status)}</span>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="space-y-4">
-              <div className="relative">
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-3 rounded-full transition-all duration-700 ease-out relative"
-                    style={{ width: `${currentResult.progress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {currentResult.progress}% complete
-                  </span>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {currentResult.status === 'processing' ? 'Generating frames...' : 
-                     currentResult.status === 'queued' ? 'Preparing...' : 'Processing...'}
-                  </span>
-                </div>
-              </div>
-              {currentResult.message && (
-                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-700 dark:text-blue-300">{currentResult.message}</p>
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderResultsStep = () => {
-    const currentResult = results[0];
-    if (!currentResult) return null;
-
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mr-4">
-              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
-            </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 bg-clip-text text-transparent">
-              Video Generated!
-            </h1>
-          </div>
-          <p className={`text-xl ${colors.text.secondary} font-medium`}>
-            Your AI-generated video is ready for download
-          </p>
-        </div>
-
-        <div className={`p-8 rounded-2xl border shadow-xl bg-white dark:bg-gradient-to-br dark:from-dark-card/90 dark:to-dark-bg-secondary/50 backdrop-blur-md`}>
-          <div className="space-y-6">
-            {/* Prompt Display */}
-            <div>
-              <p className={`text-sm ${colors.text.secondary} mb-2`}>
-                Generated from text:
-              </p>
-              <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
-            </div>
-
-              {/* Video Preview */}
-            {currentResult.status === 'completed' && currentResult.outputFile && (
-              <div className="text-center">
-                <div className="relative inline-block">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
-                  <div className="relative bg-white dark:bg-gray-800 p-2 rounded-2xl">
-                    <video 
-                      controls 
-                      preload="auto"
-                      className="w-full max-w-2xl rounded-xl shadow-2xl mx-auto"
-                      src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
-                      onLoadedMetadata={(e) => {
-                        console.log('Video metadata loaded:', {
-                          duration: e.currentTarget.duration,
-                          videoWidth: e.currentTarget.videoWidth,
-                          videoHeight: e.currentTarget.videoHeight
-                        });
-                      }}
-                      onCanPlay={(e) => {
-                        console.log('Video can play:', e.currentTarget.readyState);
-                      }}
-                      onError={(e) => {
-                        console.error('Video error:', e);
-                      }}
-                    >
-                      Your browser does not support the video tag.
-                    </video>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Error Display */}
-            {currentResult.status === 'failed' && currentResult.error && (
-              <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                <p className="text-red-600 dark:text-red-400 text-sm">{currentResult.error}</p>
-              </div>
-            )}
-
-            {/* Settings Display */}
-            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Resolution:</span>
-                  <p className="font-medium">576×1024 (Video Optimal)</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Duration:</span>
-                  <p className="font-medium">4s (Best Quality)</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Format:</span>
-                  <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Model:</span>
-                  <p className="font-medium">
-                    {settings.model === 'animatediff' ? 'AnimateDiff' :
-                     settings.model === 'kandinsky' ? 'Kandinsky 2.2' :
-                     settings.model}
-                  </p>
-                </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              {currentResult.status === 'completed' && currentResult.outputFile && (
-                  <a
-                  href={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
-                    download
-                  className="flex items-center justify-center space-x-2 px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-accent-blue/90 transition-colors"
-                  >
-                  <Download className="h-5 w-5" />
-                  <span>Download Video</span>
-                  </a>
-              )}
-                  <button
-                    onClick={() => {
-                      setPrompt('');
-                      setCurrentStep('prompt');
-                      setCurrentJobId(null);
-                      setResults([]);
-                    }}
-                    className="flex items-center justify-center space-x-2 px-6 py-3 border border-accent-blue/30 text-accent-blue rounded-lg hover:bg-accent-blue/10 transition-colors"
-                  >
-                    <RefreshCw className="h-5 w-5" />
-                    <span>Generate Another</span>
-                  </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto">
-        {currentStep === 'prompt' && renderPromptStep()}
-        {currentStep === 'progress' && renderProgressStep()}
-        {currentStep === 'results' && renderResultsStep()}
       </div>
     </div>
   );
 }
-
-

@@ -168,7 +168,7 @@ class VideoGenerator:
     
     async def generate(self, prompt: str, model_name: str, duration: int = 5, 
                       output_format: str = "mp4", image_input: Optional[Union[str, Image.Image]] = None,
-                      progress_callback: Optional[callable] = None) -> str:
+                      progress_callback: Optional[callable] = None, **kwargs) -> str:
         """Generate video from text prompt or image input"""
         try:
             # Ensure model is loaded
@@ -180,11 +180,11 @@ class VideoGenerator:
             
             # Generate video using the appropriate method
             if model_name == "animatediff":
-                return await self._generate_with_animatediff(prompt, duration, output_format, progress_callback)
+                return await self._generate_with_animatediff(prompt, duration, output_format, progress_callback, **kwargs)
             elif model_name == "stable-diffusion":
-                return await self._generate_with_stable_diffusion(prompt, duration, output_format, progress_callback)
+                return await self._generate_with_stable_diffusion(prompt, duration, output_format, progress_callback, **kwargs)
             elif model_name == "stable-video-diffusion":
-                return await self._generate_with_pipeline(prompt, duration, output_format, image_input, progress_callback)
+                return await self._generate_with_pipeline(prompt, duration, output_format, image_input, progress_callback, **kwargs)
             else:
                 raise ValueError(f"Unsupported model: {model_name}. Supported models: animatediff, stable-diffusion, stable-video-diffusion")
                 
@@ -263,7 +263,7 @@ class VideoGenerator:
             raise RuntimeError(f"Image generation failed: {e}")
     
     async def _generate_with_animatediff(self, prompt: str, duration: int, output_format: str, 
-                                       progress_callback: Optional[callable] = None) -> str:
+                                       progress_callback: Optional[callable] = None, **kwargs) -> str:
         """Generate video using AnimateDiff"""
         try:
             pipe = self.models["animatediff"]
@@ -282,11 +282,24 @@ class VideoGenerator:
                     if progress_callback:
                         progress_callback(25, "Generating GIF with AnimateDiff...")
                     
-                    output_path = await generator.generate_video(
-                        prompt=prompt,
-                        num_frames=min(duration * 8, 16),  # 8 fps, max 16 frames
-                        progress_callback=progress_callback
-                    )
+                    # Prepare generation parameters
+                    generation_params = {
+                        "prompt": prompt,
+                        "progress_callback": progress_callback
+                    }
+                    
+                    # Use custom parameters if provided, otherwise use defaults
+                    if "num_frames" in kwargs:
+                        generation_params["num_frames"] = kwargs["num_frames"]
+                    else:
+                        generation_params["num_frames"] = min(duration * 8, 16)  # 8 fps, max 16 frames
+                    
+                    # Add other advanced parameters if provided
+                    for param in ["width", "height", "num_inference_steps", "guidance_scale", "motion_scale", "seed"]:
+                        if param in kwargs:
+                            generation_params[param] = kwargs[param]
+                    
+                    output_path = await generator.generate_video(**generation_params)
                     
                     return output_path
                 else:
