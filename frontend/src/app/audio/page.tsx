@@ -64,9 +64,9 @@ export default function Page() {
           error: job.error,
           createdAt: job.created_at,
           settings: {
-            voice: 'default', // Default, could be enhanced
             sampleRate: job.sample_rate || 22050,
-            format: job.output_format || 'wav'
+            format: job.output_format || 'wav',
+            voiceStyle: job.voice_style || 'auto'
           }
         }))
         .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -77,18 +77,39 @@ export default function Page() {
         : audioJobs[0];
       
       if (currentJob) {
-        setResults([currentJob]);
+        // Update results with current job data
+        setResults(prev => {
+          const existing = prev.find(r => r.id === currentJob.id);
+          if (existing) {
+            // Update existing result with latest job data
+            return prev.map(r => r.id === currentJob.id ? {
+              ...r,
+              status: currentJob.status,
+              progress: currentJob.progress,
+              outputFile: currentJob.outputFile,
+              error: currentJob.error
+            } : r);
+          } else {
+            // Add new result
+            return [currentJob];
+          }
+        });
         
         // Check if job is completed and move to results step
         if (currentJob.status === 'completed' && currentStep === 'progress') {
-          setCurrentStep('results');
-          setIsGenerating(false);
+          // Add a small delay to ensure progress step is visible
+          setTimeout(() => {
+            setCurrentStep('results');
+            setIsGenerating(false);
+          }, 1000);
         }
         
         // Check if job failed and move to results step
         if (currentJob.status === 'failed' && currentStep === 'progress') {
-          setCurrentStep('results');
-          setIsGenerating(false);
+          setTimeout(() => {
+            setCurrentStep('results');
+            setIsGenerating(false);
+          }, 1000);
         }
       }
     } catch (error) {
@@ -799,6 +820,15 @@ export default function Page() {
               <span className="text-xl font-medium">{getStatusText(currentResult.status)}</span>
             </div>
 
+            {/* Loading Animation */}
+            <div className="flex justify-center">
+              <div className="flex space-x-2">
+                <div className="w-3 h-3 bg-violet-500 rounded-full animate-bounce"></div>
+                <div className="w-3 h-3 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-3 h-3 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+
             {/* Progress Bar */}
             <div className="space-y-4">
               <div className="relative">
@@ -887,25 +917,26 @@ export default function Page() {
               {/* Audio Preview */}
             {currentResult.status === 'completed' && currentResult.outputFile && (
               <div className="text-center">
-                <div className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 p-8 rounded-2xl border border-violet-200 dark:border-violet-800 max-w-lg mx-auto">
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">🎵 Your Generated Audio</h3>
+                <div className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 p-8 rounded-2xl border border-violet-200 dark:border-violet-800 max-w-2xl mx-auto">
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6">🎵 Your Generated Audio</h3>
                   
-                  <div className="flex items-center justify-center space-x-6 p-6 rounded-xl bg-white dark:bg-gray-800 shadow-lg">
+                  {/* Custom Audio Player */}
+                  <div className="flex items-center justify-center space-x-6 p-6 rounded-xl bg-white dark:bg-gray-800 shadow-lg mb-6">
                     <button
                       onClick={() => toggleAudio(currentResult.id, getApiUrl(currentResult.outputFile!.replace('../outputs', '/outputs')))}
-                      className="flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 text-white hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+                      className="flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 text-white hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
                     >
                       {playingAudio === currentResult.id ? (
-                        <Pause className="h-10 w-10" />
+                        <Pause className="h-12 w-12" />
                       ) : (
-                        <Play className="h-10 w-10 ml-1" />
+                        <Play className="h-12 w-12 ml-1" />
                       )}
                     </button>
                     
                     <div className="flex-1 space-y-3">
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
                         <div 
-                          className="bg-gradient-to-r from-violet-500 to-blue-500 h-3 rounded-full transition-all duration-300" 
+                          className="bg-gradient-to-r from-violet-500 to-blue-500 h-4 rounded-full transition-all duration-300" 
                           style={{ width: playingAudio === currentResult.id ? '100%' : '0%' }}
                         ></div>
                       </div>
@@ -914,18 +945,32 @@ export default function Page() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Fallback HTML5 Audio Player */}
+                  <div className="mb-6">
+                    <p className="text-sm text-gray-500 mb-3">Or use the standard audio player:</p>
+                    <audio
+                      controls
+                      className="w-full rounded-lg shadow-lg"
+                      src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
+                      preload="metadata"
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
                   
-                  <div className="mt-4 flex justify-center space-x-3">
+                  <div className="flex justify-center space-x-3">
                     <a
                       href={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
                       download
-                      className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-violet-500 to-blue-500 text-white rounded-lg hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
+                      <Download className="h-5 w-5 mr-2" />
+                      Download Audio
                     </a>
                   </div>
                   
+                  {/* Hidden audio element for custom player */}
                   <audio
                     id={`audio-${currentResult.id}`}
                     src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
