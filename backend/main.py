@@ -28,8 +28,12 @@ import threading
 import time
 import os
 from huggingface_hub import snapshot_download
+from config import get_config
 
 app = FastAPI(title="Text-to-Media Generator", version="1.0.0")
+
+# Initialize configuration
+config = get_config()
 
 # CORS middleware
 app.add_middleware(
@@ -479,7 +483,7 @@ async def get_gpu_info():
 @app.get("/storage-usage")
 async def get_storage_usage():
     """Return total bytes used by files in outputs directory"""
-    outputs_dir = pathlib.Path('../outputs')
+    outputs_dir = config.outputs_path
     total_bytes = 0
     try:
         if outputs_dir.exists():
@@ -531,7 +535,7 @@ async def get_settings():
             pass
         
         return {
-            "outputs_path": str(pathlib.Path('../outputs').resolve()),
+            "outputs_path": str(config.outputs_path),
             "storage_usage_bytes": usage["bytes"],
             "gpu_info": gpu_info,
             "ffmpeg_available": ffmpeg_available,
@@ -544,7 +548,7 @@ async def get_settings():
 @app.post("/outputs/clear")
 async def clear_outputs():
     """Delete all files in outputs directory"""
-    outputs_dir = pathlib.Path('../outputs')
+    outputs_dir = config.outputs_path
     if not outputs_dir.exists():
         return {"message": "Outputs directory does not exist", "deleted_files": 0, "freed_space_mb": 0}
     
@@ -589,7 +593,7 @@ async def clear_outputs():
 async def serve_video_file(filename: str, request: Request):
     """Serve video files with proper binary handling"""
     try:
-        file_path = pathlib.Path(f'../outputs/videos/{filename}')
+        file_path = config.videos_output_path / filename
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Video file not found")
         # Handle HTTP Range requests for streaming
@@ -636,7 +640,7 @@ async def serve_video_file(filename: str, request: Request):
 async def serve_audio_file(filename: str, request: Request):
     """Serve audio files with proper binary handling"""
     try:
-        file_path = pathlib.Path(f'../outputs/audio/{filename}')
+        file_path = config.audio_output_path / filename
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Audio file not found")
         
@@ -685,7 +689,7 @@ async def serve_audio_file(filename: str, request: Request):
 async def serve_voice_preview(filename: str):
     """Serve voice preview files with proper binary handling"""
     try:
-        file_path = pathlib.Path(f'../outputs/voice-previews/{filename}')
+        file_path = config.voice_previews_path / filename
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Voice preview file not found")
         
@@ -731,9 +735,13 @@ async def delete_output_file(file_type: str, filename: str):
     
     # Handle image files which are in the main outputs directory
     if file_type == 'image':
-        file_path = pathlib.Path(f'../outputs/{filename}')
+        file_path = config.image_output_path / filename
+    elif file_type == 'videos':
+        file_path = config.videos_output_path / filename
+    elif file_type == 'audio':
+        file_path = config.audio_output_path / filename
     else:
-        file_path = pathlib.Path(f'../outputs/{file_type}/{filename}')
+        raise HTTPException(status_code=400, detail="Invalid file type")
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File {filename} not found")
@@ -744,44 +752,6 @@ async def delete_output_file(file_type: str, filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-@app.post("/outputs/{file_type}/{filename}/rename")
-async def rename_output_file(file_type: str, filename: str, new_name: str = Form(...)):
-    """Rename a specific output file"""
-    if file_type not in ['videos', 'audio', 'image']:
-        raise HTTPException(status_code=400, detail="Invalid file type. Must be 'videos', 'audio', or 'image'")
-    
-    # Handle image files which are in the main outputs directory
-    if file_type == 'image':
-        file_path = pathlib.Path(f'../outputs/{filename}')
-        new_file_path = pathlib.Path(f'../outputs/{new_name}')
-    else:
-        file_path = pathlib.Path(f'../outputs/{file_type}/{filename}')
-        new_file_path = pathlib.Path(f'../outputs/{file_type}/{new_name}')
-    
-    print(f"Looking for file at: {file_path.absolute()}")
-    print(f"File exists: {file_path.exists()}")
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File {filename} not found at {file_path.absolute()}")
-    
-    if new_file_path.exists():
-        raise HTTPException(status_code=400, detail=f"File {new_name} already exists")
-    
-    try:
-        # Preserve file extension
-        original_ext = file_path.suffix
-        if not new_name.endswith(original_ext):
-            new_name = f"{new_name}{original_ext}"
-            new_file_path = pathlib.Path(f'../outputs/{file_type}/{new_name}')
-        
-        print(f"Renaming from: {file_path.absolute()}")
-        print(f"Renaming to: {new_file_path.absolute()}")
-        
-        file_path.rename(new_file_path)
-        return {"message": f"File renamed from {filename} to {new_name}", "new_filename": new_name}
-    except Exception as e:
-        print(f"Rename error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")
 
 @app.get("/models")
 async def get_available_models():
@@ -896,7 +866,7 @@ async def get_all_jobs():
 async def get_video_outputs():
     """Get list of generated video files"""
     try:
-        videos_dir = pathlib.Path('../outputs/videos')
+        videos_dir = config.videos_output_path
         if not videos_dir.exists():
             return {"videos": []}
         
@@ -921,7 +891,7 @@ async def get_video_outputs():
 async def get_audio_outputs():
     """Get list of generated audio files"""
     try:
-        audio_dir = pathlib.Path('../outputs/audio')
+        audio_dir = config.audio_output_path
         if not audio_dir.exists():
             return {"audio": []}
         
@@ -948,8 +918,8 @@ async def get_image_outputs():
     try:
         # Check both the main outputs directory and outputs/videos for images
         output_dirs = [
-            pathlib.Path('../outputs'),
-            pathlib.Path('../outputs/videos')
+            config.image_output_path,
+            config.videos_output_path
         ]
         
         image_files = []
@@ -983,7 +953,7 @@ async def get_image_outputs():
 async def serve_image_file(filename: str):
     """Serve image files from the main outputs directory"""
     try:
-        file_path = pathlib.Path(f'../outputs/{filename}')
+        file_path = config.image_output_path / filename
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Image file not found")
         
@@ -1253,85 +1223,107 @@ async def download_model_stream(model_name: str, force: bool = False):
 
             yield f"data: {json.dumps({'type': 'log', 'message': f'Starting download for {model_name} ({repo_id})'})}\n\n"
 
-            # Start download in a background thread so we can emit progress
-            from threading import Thread
-            import time as _time
+            # Use the download script with proper progress tracking
+            script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
+            cmd = [sys.executable, str(script_path), "--model", model_name]
+            if force:
+                cmd.append("--force")
 
-            def _do_download():
-                snapshot_download(
-                    repo_id=repo_id,
-                    local_dir=local_dir,
-                    resume_download=True,
-                    local_dir_use_symlinks=False,
-                )
+            cmd_str = " ".join(cmd)
+            yield f"data: {json.dumps({'type': 'log', 'message': f'Running: {cmd_str}'})}\n\n"
 
-            th = Thread(target=_do_download, daemon=True)
-            th.start()
+            # Start the download process
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
 
-            # Estimated total bytes using configured size_gb when available
-            estimated_total_bytes = None
-            try:
-                size_gb = download_status["models"][model_name].get("size_gb") or 0
-                if size_gb and size_gb > 0:
-                    estimated_total_bytes = int(size_gb * 1024 * 1024 * 1024)
-            except Exception:
-                pass
-
-            last_emit_bytes = -1
-            last_time = time.time()
-            last_bytes_for_speed = 0
-            while th.is_alive():
-                total_bytes = 0
-                try:
-                    for root, _, files in os.walk(local_dir):
-                        for f in files:
-                            fp = os.path.join(root, f)
-                            try:
-                                total_bytes += os.path.getsize(fp)
-                            except Exception:
-                                continue
-                except Exception:
-                    pass
-
-                if total_bytes != last_emit_bytes:
-                    last_emit_bytes = total_bytes
-                    progress = 0
-                    if estimated_total_bytes and estimated_total_bytes > 0:
-                        progress = max(0, min(100, int((total_bytes / estimated_total_bytes) * 100)))
-                    now = time.time()
-                    dt = max(1e-3, now - last_time)
-                    speed_mbps = max(0.0, (total_bytes - last_bytes_for_speed) / dt / (1024 * 1024))
-                    last_time = now
-                    last_bytes_for_speed = total_bytes
-                    payload = {
-                        'type': 'progress',
-                        'downloaded_mb': round(total_bytes / (1024 * 1024), 1),
-                        'progress': progress,
-                        'speed_mbps': round(speed_mbps, 2),
-                        'total_mb_estimated': round((estimated_total_bytes or 0) / (1024 * 1024), 1) if estimated_total_bytes else None,
-                        'message': f"Downloading {model_name}..."
-                    }
-                    yield f"data: {json.dumps(payload)}\n\n"
-                _time.sleep(1.0)
-
-            # Join thread and catch any late exceptions (none exposed directly)
-            th.join(timeout=1.0)
-
-            # Verify
-            local_path = pathlib.Path(local_dir)
-            weight_files = list(local_path.rglob("*.safetensors")) + list(local_path.rglob("*.bin")) + list(local_path.rglob("*.pt")) + list(local_path.rglob("*.pth"))
-            if len(weight_files) == 0 and model_name == 'bark':
-                # Bark uses cache, attempt preload to fill cache
-                try:
-                    from bark import preload_models
-                    preload_models()
-                except Exception:
-                    pass
-
-            yield f"data: {json.dumps({'type': 'success', 'message': f'{model_name} download completed successfully!'})}\n\n"
+            # Track progress
+            total_size_gb = info.get("size_gb", 0)
+            downloaded_size = 0
+            start_time = time.time()
+            
+            # Read output line by line
+            for line in iter(process.stdout.readline, ''):
+                if not line:
+                    break
+                    
+                line = line.strip()
+                if not line:
+                    continue
                 
+                # Parse progress from the script output
+                progress_data = {
+                    'type': 'log',
+                    'message': line,
+                    'model_id': model_name,
+                    'size_gb': total_size_gb
+                }
+                
+                # Try to extract progress information from the line
+                if 'Downloading' in line and 'MB/s' in line:
+                    # Extract download speed and progress
+                    try:
+                        # Look for patterns like "100%|████████████| 1.2GB/1.2GB [00:30<00:00, 40.5MB/s]"
+                        import re
+                        progress_match = re.search(r'(\d+)%', line)
+                        speed_match = re.search(r'(\d+\.?\d*)MB/s', line)
+                        size_match = re.search(r'(\d+\.?\d*)(GB|MB)/(\d+\.?\d*)(GB|MB)', line)
+                        
+                        if progress_match:
+                            progress_percent = int(progress_match.group(1))
+                            progress_data['type'] = 'progress'
+                            progress_data['progress'] = progress_percent
+                            progress_data['overall_progress'] = progress_percent
+                            
+                            if speed_match:
+                                speed_mbps = float(speed_match.group(1))
+                                progress_data['speed_mbps'] = speed_mbps
+                            
+                            if size_match:
+                                downloaded = float(size_match.group(1))
+                                downloaded_unit = size_match.group(2)
+                                total = float(size_match.group(3))
+                                total_unit = size_match.group(4)
+                                
+                                # Convert to MB
+                                if downloaded_unit == 'GB':
+                                    downloaded_mb = downloaded * 1024
+                                else:
+                                    downloaded_mb = downloaded
+                                    
+                                if total_unit == 'GB':
+                                    total_mb = total * 1024
+                                else:
+                                    total_mb = total
+                                
+                                progress_data['downloaded_mb'] = downloaded_mb
+                                progress_data['total_mb'] = total_mb
+                                
+                                # Calculate ETA
+                                if speed_mbps > 0:
+                                    remaining_mb = total_mb - downloaded_mb
+                                    eta_seconds = remaining_mb / speed_mbps
+                                    progress_data['eta_seconds'] = eta_seconds
+                    except Exception as e:
+                        # If parsing fails, just log the message
+                        pass
+                
+                yield f"data: {json.dumps(progress_data)}\n\n"
+
+            # Wait for process to complete
+            return_code = process.wait()
+            
+            if return_code == 0:
+                yield f"data: {json.dumps({'type': 'success', 'message': f'Successfully downloaded {model_name}'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Download failed for {model_name} (exit code: {return_code})'})}\n\n"
+
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'{model_name} download error: {str(e)}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Error during download: {str(e)}'})}\n\n"
     
     return StreamingResponse(
         generate_model_download_logs(),

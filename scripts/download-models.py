@@ -19,16 +19,23 @@ from typing import Dict, List, Optional
 from huggingface_hub import snapshot_download
 import logging
 
+# Add backend to path to import config
+sys.path.append(str(pathlib.Path(__file__).parent.parent / "backend"))
+from config import get_config
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Initialize configuration
+config = get_config()
 
 # Model configurations
 MODELS = {
     "stable_diffusion": {
         "name": "Stable Diffusion v1.5",
         "repo_id": "runwayml/stable-diffusion-v1-5",
-        "local_dir": "../models/image/stable-diffusion",
+        "local_dir": str(config.get_model_path("image", "stable-diffusion")),
         "size_gb": 44.0,
         "priority": 1,  # High priority - base model
         "description": "Text-to-image generation (base model for AnimateDiff)"
@@ -36,7 +43,7 @@ MODELS = {
     "animatediff": {
         "name": "AnimateDiff Official Repository",
         "repo_id": "guoyww/AnimateDiff",
-        "local_dir": "../models/video/animatediff",
+        "local_dir": str(config.get_model_path("video", "animatediff")),
         "size_gb": 5.0,
         "priority": 3,
         "description": "Official AnimateDiff repository with motion adapters and configs"
@@ -44,7 +51,7 @@ MODELS = {
     "animatediff_motion_adapter": {
         "name": "AnimateDiff Motion Adapter v1.5.2",
         "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
-        "local_dir": "../models/video/animatediff/motion_adapter",
+        "local_dir": str(config.get_model_path("video", "animatediff") / "motion_adapter"),
         "size_gb": 2.0,
         "priority": 3,
         "description": "Motion adapter for AnimateDiff v1.5.2"
@@ -52,7 +59,7 @@ MODELS = {
     "bark": {
         "name": "Bark",
         "repo_id": "suno/bark",
-        "local_dir": "../models/audio/bark",
+        "local_dir": str(config.get_model_path("audio", "bark")),
         "size_gb": 5.0,
         "priority": 2,  # High priority - primary TTS model
         "description": "Text-to-speech generation"
@@ -472,11 +479,10 @@ def download_animatediff_models() -> bool:
         animatediff_dir = pathlib.Path("../models/video/animatediff")
         motion_adapter_dir = pathlib.Path("../models/video/animatediff/motion_adapter")
         
-        # Check for essential files
+        # Check for essential files in the main repository
         essential_files = [
-            "configs/prompts/1_animate/1_1_animate_RealisticVision.yaml",
-            "scripts/animate.py",
-            "app.py"
+            "config.json",
+            "README.md"
         ]
         
         missing_files = []
@@ -494,10 +500,15 @@ def download_animatediff_models() -> bool:
             logger.error("❌ No motion adapter weight files found")
             return False
         
+        # Check for motion adapter config
+        adapter_config = motion_adapter_dir / "config.json"
+        if not adapter_config.exists():
+            logger.warning("⚠️  Motion adapter config.json not found")
+        
         logger.info("✅ AnimateDiff setup completed successfully")
         logger.info(f"📁 Repository: {animatediff_dir}")
         logger.info(f"📁 Motion adapter: {motion_adapter_dir}")
-        logger.info(f"📁 Config files: {len(list(animatediff_dir.rglob('*.yaml')))} YAML configs found")
+        logger.info(f"📁 Motion adapter files: {len(adapter_files)} weight files found")
         
         return True
         
@@ -573,6 +584,23 @@ def verify_model_integrity(model_id: str) -> bool:
         for req_file in required_files:
             if not (local_dir / req_file).exists():
                 missing_files.append(req_file)
+        
+        # Check for motion adapter directory and files
+        motion_adapter_dir = local_dir / "motion_adapter"
+        if not motion_adapter_dir.exists():
+            logger.warning(f"⚠️  {config['name']}: Missing motion_adapter directory")
+            return False
+        
+        # Check for motion adapter weight files
+        adapter_files = list(motion_adapter_dir.rglob("*.safetensors")) + list(motion_adapter_dir.rglob("*.bin"))
+        if len(adapter_files) == 0:
+            logger.warning(f"⚠️  {config['name']}: No motion adapter weight files found")
+            return False
+        
+        # Check for motion adapter config
+        adapter_config = motion_adapter_dir / "config.json"
+        if not adapter_config.exists():
+            logger.warning(f"⚠️  {config['name']}: Motion adapter config.json not found")
         
         if missing_files:
             logger.warning(f"⚠️  {config['name']}: Missing required files: {missing_files}")
