@@ -60,15 +60,14 @@ export default function Page() {
     models?: {
       [key: string]: {
         name: string;
-        repo_id: string;
-        local_dir: string;
-        size_gb: number;
+        repo_id?: string;
+        local_dir?: string;
+        size_gb?: number;
         status: string;
         progress: number;
         downloaded_mb: number;
-        speed_mbps: number;
-        eta_seconds: number;
-        files_verified: boolean;
+        eta_seconds?: number;
+        files_verified?: boolean;
       };
     };
   }>({
@@ -341,7 +340,7 @@ export default function Page() {
     }
   };
 
-  const deleteModel = async (modelName: string, modelType: 'video' | 'audio') => {
+  const deleteModel = async (modelName: string, modelType: 'video' | 'audio' | 'image') => {
     // Show confirmation dialog
     const confirmed = window.confirm(
       `Are you sure you want to delete ${modelName}?\n\n` +
@@ -552,9 +551,7 @@ export default function Page() {
                             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
                               <span>Downloading...</span>
                               <span>
-                                {downloadStatus.models?.[model.id]?.downloaded_mb ?? 0}
-                                {downloadStatus.models?.[model.id]?.total_mb_estimated ? ` / ${downloadStatus.models?.[model.id]?.total_mb_estimated}` : ''}
-                                MB • {downloadStatus.models?.[model.id]?.speed_mbps ?? 0} MB/s • {downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%
+                                {downloadStatus.models?.[model.id]?.downloaded_mb ?? 0} MB • {downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%
                               </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -600,11 +597,11 @@ export default function Page() {
                             <div className={`px-2 py-1 rounded-full text-xs ${
                               model.loaded 
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                                : model.size_gb > 0
+                                : (model.size_gb && model.size_gb > 0)
                                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
                                   : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
                             }`}>
-                            {model.loaded ? 'Loaded' : (model.size_gb > 0 ? 'Available' : 'Not Available')}
+                            {model.loaded ? 'Loaded' : ((model.size_gb && model.size_gb > 0) ? 'Available' : 'Not Available')}
                             </div>
                             {model.size_gb && model.size_gb > 0 ? (
                               <button
@@ -647,9 +644,7 @@ export default function Page() {
                             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
                               <span>Downloading...</span>
                               <span>
-                                {downloadStatus.models?.[model.id]?.downloaded_mb ?? 0}
-                                {downloadStatus.models?.[model.id]?.total_mb_estimated ? ` / ${downloadStatus.models?.[model.id]?.total_mb_estimated}` : ''}
-                                MB • {downloadStatus.models?.[model.id]?.speed_mbps ?? 0} MB/s • {downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%
+                                {downloadStatus.models?.[model.id]?.downloaded_mb ?? 0} MB • {downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%
                               </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -834,15 +829,6 @@ export default function Page() {
                   <span>Download Models</span>
                 </div>
               </button>
-                <button
-                  onClick={() => startDownload(true)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 bg-accent-violet/10 text-accent-violet hover:bg-accent-violet/20 border border-accent-violet/30"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RefreshCw className="h-3 w-3" />
-                    <span>Force Re-download</span>
-                  </div>
-                </button>
               </div>
               )}
               
