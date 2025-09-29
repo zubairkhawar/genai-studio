@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
@@ -543,40 +543,98 @@ async def clear_outputs():
 
 # File serving endpoints (must come before generic DELETE route)
 @app.get("/outputs/videos/{filename}")
-async def serve_video_file(filename: str):
+async def serve_video_file(filename: str, request: Request):
     """Serve video files with proper binary handling"""
     try:
         file_path = pathlib.Path(f'../outputs/videos/{filename}')
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Video file not found")
-        
-        return FileResponse(
-            path=str(file_path),
-            media_type="video/mp4",
-            filename=filename
-        )
+        # Handle HTTP Range requests for streaming
+        range_header = request.headers.get("range")
+        if range_header:
+            # Parse: bytes=start-end
+            try:
+                file_size = file_path.stat().st_size
+                bytes_unit, byte_range = range_header.split("=")
+                start_str, end_str = (byte_range or "0-").split("-")
+                start = int(start_str) if start_str else 0
+                end = int(end_str) if end_str else file_size - 1
+                start = max(0, start)
+                end = min(file_size - 1, end)
+
+                chunk_size = end - start + 1
+                def iter_file_range(path: pathlib.Path, start_pos: int, end_pos: int):
+                    with open(path, "rb") as f:
+                        f.seek(start_pos)
+                        remaining = end_pos - start_pos + 1
+                        while remaining > 0:
+                            chunk = f.read(min(1024 * 1024, remaining))
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
+
+                headers = {
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(chunk_size),
+                    "Content-Type": "video/mp4",
+                }
+                return StreamingResponse(iter_file_range(file_path, start, end), status_code=206, headers=headers)
+            except Exception:
+                # Fall through to full response
+                pass
+
+        return FileResponse(path=str(file_path), media_type="video/mp4", filename=filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/outputs/audio/{filename}")
-async def serve_audio_file(filename: str):
+async def serve_audio_file(filename: str, request: Request):
     """Serve audio files with proper binary handling"""
     try:
         file_path = pathlib.Path(f'../outputs/audio/{filename}')
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Audio file not found")
         
-        media_type = "audio/wav"
-        if filename.lower().endswith('.mp3'):
-            media_type = "audio/mpeg"
-        elif filename.lower().endswith('.wav'):
-            media_type = "audio/wav"
-        
-        return FileResponse(
-            path=str(file_path),
-            media_type=media_type,
-            filename=filename
-        )
+        media_type = "audio/mpeg" if filename.lower().endswith('.mp3') else "audio/wav"
+
+        # Handle HTTP Range requests for streaming
+        range_header = request.headers.get("range")
+        if range_header:
+            try:
+                file_size = file_path.stat().st_size
+                bytes_unit, byte_range = range_header.split("=")
+                start_str, end_str = (byte_range or "0-").split("-")
+                start = int(start_str) if start_str else 0
+                end = int(end_str) if end_str else file_size - 1
+                start = max(0, start)
+                end = min(file_size - 1, end)
+
+                chunk_size = end - start + 1
+                def iter_file_range(path: pathlib.Path, start_pos: int, end_pos: int):
+                    with open(path, "rb") as f:
+                        f.seek(start_pos)
+                        remaining = end_pos - start_pos + 1
+                        while remaining > 0:
+                            chunk = f.read(min(1024 * 512, remaining))
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
+
+                headers = {
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(chunk_size),
+                    "Content-Type": media_type,
+                }
+                return StreamingResponse(iter_file_range(file_path, start, end), status_code=206, headers=headers)
+            except Exception:
+                # Fall through to full response
+                pass
+
+        return FileResponse(path=str(file_path), media_type=media_type, filename=filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
