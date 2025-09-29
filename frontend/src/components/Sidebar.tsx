@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Film, Volume2, Image as ImageIcon, Settings, FolderOpen, ChevronLeft, ChevronRight, ListChecks } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import Image from 'next/image';
 
 interface SidebarProps {
   current: string;
@@ -41,14 +42,20 @@ export function Sidebar({ current, expanded, onToggle }: SidebarProps) {
         <div className="flex items-center">
           {expanded ? (
             <>
-              <div className="w-8 h-8 rounded-md bg-accent-blue/20 flex items-center justify-center text-accent-blue font-bold">G</div>
+              <Image
+                src="/logo.png"
+                alt="GenStudio"
+                width={32}
+                height={32}
+                className="rounded-md"
+              />
               <span className="ml-3 font-semibold transition-all opacity-100 whitespace-nowrap">GenStudio</span>
             </>
           ) : (
             <button
               aria-label="Expand sidebar"
               onClick={onToggle}
-              className="w-8 h-8 rounded-md bg-accent-blue/20 flex items-center justify-center text-accent-blue hover:bg-accent-blue/30 transition-colors"
+              className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-white/5 hover:dark:bg-black/10 transition-colors"
             >
               <ChevronRight className="h-5 w-5" />
             </button>

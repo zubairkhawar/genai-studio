@@ -33,15 +33,14 @@ interface DownloadStatus {
   models?: {
     [key: string]: {
       name: string;
-      repo_id: string;
-      local_dir: string;
-      size_gb: number;
+      repo_id?: string;
+      local_dir?: string;
+      size_gb?: number;
       status: string;
       progress: number;
       downloaded_mb: number;
-      speed_mbps: number;
-      eta_seconds: number;
-      files_verified: boolean;
+      eta_seconds?: number;
+      files_verified?: boolean;
     };
   };
 }
@@ -62,6 +61,16 @@ export default function ModelDownloadModal({
     error: null
   });
   const [downloadingModels, setDownloadingModels] = useState<string[]>([]);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortController) {
+        abortController.abort();
+      }
+    };
+  }, [abortController]);
 
   const getModelTypeInfo = (type: 'video' | 'audio' | 'image') => {
     switch (type) {
@@ -92,6 +101,10 @@ export default function ModelDownloadModal({
   const startDownload = async (modelId: string) => {
     if (downloadStatus.is_downloading) return;
 
+    // Create new AbortController for this download
+    const controller = new AbortController();
+    setAbortController(controller);
+
     setDownloadingModels(prev => [...prev, modelId]);
     setDownloadStatus({
       is_downloading: true,
@@ -107,7 +120,8 @@ export default function ModelDownloadModal({
         headers: {
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache'
-        }
+        },
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -175,18 +189,33 @@ export default function ModelDownloadModal({
       }
     } catch (error) {
       console.error('Error starting download:', error);
-      setDownloadStatus(prev => ({
-        ...prev,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        is_downloading: false
-      }));
+      
+      // Handle cancellation
+      if (error instanceof Error && error.name === 'AbortError') {
+        setDownloadStatus(prev => ({
+          ...prev,
+          status: 'cancelled',
+          message: 'Download cancelled by user',
+          is_downloading: false
+        }));
+      } else {
+        setDownloadStatus(prev => ({
+          ...prev,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          is_downloading: false
+        }));
+      }
       setDownloadingModels(prev => prev.filter(id => id !== modelId));
     }
   };
 
   const downloadAllModels = async () => {
     if (downloadStatus.is_downloading) return;
+
+    // Create new AbortController for this download
+    const controller = new AbortController();
+    setAbortController(controller);
 
     setDownloadingModels(missingModels.map(model => model.id));
     setDownloadStatus({
@@ -199,7 +228,9 @@ export default function ModelDownloadModal({
     });
 
     try {
-      const response = await fetch(getApiUrl('/download-models-stream?force=false'));
+      const response = await fetch(getApiUrl('/download-models-stream?force=false'), {
+        signal: controller.signal
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -263,12 +294,23 @@ export default function ModelDownloadModal({
       }
     } catch (error) {
       console.error('Error starting download:', error);
-      setDownloadStatus(prev => ({
-        ...prev,
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        is_downloading: false
-      }));
+      
+      // Handle cancellation
+      if (error instanceof Error && error.name === 'AbortError') {
+        setDownloadStatus(prev => ({
+          ...prev,
+          status: 'cancelled',
+          message: 'Download cancelled by user',
+          is_downloading: false
+        }));
+      } else {
+        setDownloadStatus(prev => ({
+          ...prev,
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          is_downloading: false
+        }));
+      }
       setDownloadingModels([]);
     }
   };
@@ -286,10 +328,39 @@ export default function ModelDownloadModal({
     const sizeMap: { [key: string]: number } = {
       'stable-diffusion': 4.0,
       'animatediff': 3.4,
-      'bark': 4.0,
-      'stable-video-diffusion': 5.0
+      'bark': 4.0
     };
     return sizeMap[modelId] || 2.0;
+  };
+
+  const cancelDownload = async () => {
+    if (abortController) {
+      // Cancel the fetch request
+      abortController.abort();
+      setAbortController(null);
+    }
+
+    // Also call backend cancel endpoint for any currently downloading model
+    if (downloadStatus.current_model) {
+      try {
+        await fetch(getApiUrl(`/cancel-download/${downloadStatus.current_model}`), {
+          method: 'POST'
+        });
+      } catch (error) {
+        console.error('Error calling backend cancel endpoint:', error);
+      }
+    }
+
+    // Reset download status
+    setDownloadStatus({
+      is_downloading: false,
+      overall_progress: 0,
+      current_model: "",
+      status: "cancelled",
+      message: "Download cancelled by user",
+      error: null
+    });
+    setDownloadingModels([]);
   };
 
   const modelTypeInfo = getModelTypeInfo(modelType);
@@ -449,6 +520,23 @@ export default function ModelDownloadModal({
               </div>
             </div>
           )}
+
+          {/* Cancelled Message */}
+          {downloadStatus.status === 'cancelled' && (
+            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                    Download Cancelled
+                  </h3>
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    {downloadStatus.message}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -461,11 +549,10 @@ export default function ModelDownloadModal({
               </div>
             </div>
             <button
-              onClick={onClose}
-              disabled={downloadStatus.is_downloading}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
+              onClick={downloadStatus.is_downloading ? cancelDownload : onClose}
+              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
             >
-              {downloadStatus.is_downloading ? 'Downloading...' : 'Cancel'}
+              {downloadStatus.is_downloading ? 'Cancel Download' : 'Close'}
             </button>
           </div>
         </div>

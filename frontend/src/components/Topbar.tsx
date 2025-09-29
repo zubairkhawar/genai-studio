@@ -3,6 +3,7 @@
 import { Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import Image from 'next/image';
 
 interface TopbarProps {
   title?: string;
@@ -19,8 +20,17 @@ export function Topbar({ title, sidebarExpanded = false }: TopbarProps) {
       style={{ left: sidebarExpanded ? '16rem' : '4rem' }}
     >
       <div className="h-14 px-4 flex items-center justify-between">
-        <div className="text-sm font-medium text-center truncate px-2">
-          {title ?? ''}
+        <div className="flex items-center space-x-3">
+          <Image
+            src="/logo.png"
+            alt="GenStudio"
+            width={32}
+            height={32}
+            className="rounded-lg"
+          />
+          <div className="text-sm font-medium text-center truncate px-2">
+            {title ?? ''}
+          </div>
         </div>
         <div className="flex items-center space-x-3">
           <button aria-label="Toggle theme" onClick={toggleTheme} className="p-2 rounded-lg hover:bg-white/5 hover:dark:bg-black/10 transition-colors">

@@ -241,7 +241,6 @@ export default function Page() {
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                     >
                       <option value="animatediff">AnimateDiff</option>
-                      <option value="stable-video-diffusion">Stable Video Diffusion</option>
                     </select>
                   </div>
                   <div>
@@ -265,7 +264,7 @@ export default function Page() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Quick Presets
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {Object.entries(presets).map(([key, preset]) => (
                     <button
                       key={key}
