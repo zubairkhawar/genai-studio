@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Play, Settings, Loader2, Type, Upload, X, Monitor, Zap, Clock, Target, RotateCcw } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useGenerating } from '@/contexts/GeneratingContext';
+import { useModelCheck } from '@/hooks/useModelCheck';
+import ModelDownloadModal from '@/components/ModelDownloadModal';
 import { getApiUrl } from '@/config';
 
 export default function Page() {
@@ -26,6 +28,10 @@ export default function Page() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const colors = useThemeColors();
   const { startGenerating, stopGenerating } = useGenerating();
+  
+  // Model checking
+  const { getMissingModels, checkModels } = useModelCheck();
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   // Preset configurations for different hardware
   const presets = {
@@ -114,6 +120,13 @@ export default function Page() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    
+    // Check if required models are available
+    const missingModels = getMissingModels('video', settings.model);
+    if (missingModels.length > 0) {
+      setShowDownloadModal(true);
+      return;
+    }
     
     setIsGenerating(true);
     
@@ -460,7 +473,7 @@ export default function Page() {
             <div className="pt-4">
               <button
                 onClick={handleGenerate}
-                disabled={!prompt.trim() || (generationMode === 'image-to-video' && !uploadedImage)}
+                disabled={!prompt.trim()}
                 className="group relative w-full flex items-center justify-center space-x-4 px-10 py-6 bg-gradient-to-r from-accent-blue to-accent-violet text-white rounded-2xl font-bold text-xl hover:from-accent-blue/90 hover:to-accent-violet/90 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-2xl hover:shadow-accent-blue/25"
               >
                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-accent-blue to-accent-violet opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
@@ -472,6 +485,18 @@ export default function Page() {
           </div>
         </div>
       </div>
+
+      {/* Model Download Modal */}
+      <ModelDownloadModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        missingModels={getMissingModels('video', settings.model)}
+        modelType="video"
+        onModelsDownloaded={() => {
+          checkModels();
+          setShowDownloadModal(false);
+        }}
+      />
     </div>
   );
 }

@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Sparkles, CheckCircle, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Sparkles, CheckCircle, Loader2, Image as ImageIcon, Download, RefreshCw } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useGenerating } from '@/contexts/GeneratingContext';
+import { useModelCheck } from '@/hooks/useModelCheck';
+import ModelDownloadModal from '@/components/ModelDownloadModal';
 import { getApiUrl } from '@/config';
-import { ProgressModal } from '@/components/ProgressModal';
 
 
 export default function Page() {
@@ -14,7 +16,13 @@ export default function Page() {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState<string>('');
-  const [showProgress, setShowProgress] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const { startGenerating, updateProgress, stopGenerating } = useGenerating();
+  
+  // Model checking
+  const { getMissingModels, checkModels } = useModelCheck();
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
 
   useEffect(() => {
@@ -26,9 +34,21 @@ export default function Page() {
         const job = await res.json();
         setProgress(job.progress || 0);
         setCurrentStep(job.message || 'Generating image...');
+        
+        // Update global progress
+        updateProgress(job.progress || 0, job.message || 'Generating image...');
+        
         if (job.status === 'completed' || job.status === 'failed') {
           setIsGenerating(false);
-          setTimeout(()=>setShowProgress(false), 1000);
+          
+          if (job.status === 'completed' && job.output_file) {
+            // Extract filename from output_file path
+            const filename = job.output_file.split('/').pop();
+            if (filename) {
+              setGeneratedImage(`http://localhost:8000/outputs/image/${filename}`);
+              setShowResults(true);
+            }
+          }
         }
       } catch {}
     };
@@ -40,8 +60,15 @@ export default function Page() {
 
   const onGenerate = async () => {
     if (!prompt.trim()) return;
+    
+    // Check if required models are available
+    const missingModels = getMissingModels('image', 'stable-diffusion');
+    if (missingModels.length > 0) {
+      setShowDownloadModal(true);
+      return;
+    }
+    
     setIsGenerating(true);
-    setShowProgress(true);
     setProgress(0);
     setCurrentStep('Queuing job...');
     try {
@@ -59,9 +86,38 @@ export default function Page() {
       const data = await res.json();
       setCurrentJobId(data.job_id);
       setCurrentStep('Waiting for worker...');
+      
+      // Start global generating modal
+      startGenerating(
+        data.job_id,
+        'image',
+        'Generating Image',
+        'Your image is being created from text'
+      );
     } catch (e) {
       setIsGenerating(false);
       setCurrentStep('Failed to start');
+      stopGenerating();
+    }
+  };
+
+  const generateAnother = () => {
+    setShowResults(false);
+    setGeneratedImage(null);
+    setPrompt('');
+    setCurrentJobId(null);
+    setProgress(0);
+    setCurrentStep('');
+  };
+
+  const downloadImage = () => {
+    if (generatedImage) {
+      const link = document.createElement('a');
+      link.href = generatedImage;
+      link.download = `generated_image_${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -98,16 +154,75 @@ export default function Page() {
         </div>
       </div>
 
-      <ProgressModal
-        isOpen={showProgress}
-        onClose={()=>setShowProgress(false)}
-        title="Generating Image"
-        description="Your image is being created"
-        progress={progress}
-        status={isGenerating ? 'in_progress' : 'completed'}
-        currentStep={currentStep}
-        type="download"
+      {/* Results Section */}
+      {showResults && generatedImage && (
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 mb-4 shadow-2xl">
+              <CheckCircle className="h-8 w-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text text-transparent">Image Generated Successfully!</h2>
+            <p className={`mt-1 ${colors.text.secondary}`}>Your image has been created from your prompt</p>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800/50 rounded-2xl border p-6">
+            {/* Generated Image Display */}
+            <div className="text-center mb-6">
+              <div className="inline-block p-4 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-pink-900/20 rounded-2xl border border-blue-200 dark:border-blue-800">
+                <img
+                  src={generatedImage}
+                  alt="Generated image"
+                  className="max-w-full max-h-96 rounded-xl shadow-lg"
+                  style={{ maxWidth: '512px', maxHeight: '512px' }}
+                />
+              </div>
+            </div>
+
+            {/* Prompt Display */}
+            <div className="mb-6">
+              <div className="p-4 bg-gray-50 dark:bg-slate-700/50 rounded-xl border">
+                <div className="flex items-center space-x-2 mb-2">
+                  <ImageIcon className="h-5 w-5 text-blue-500" />
+                  <span className="font-semibold text-gray-900 dark:text-white">Prompt</span>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 italic">"{prompt}"</p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={downloadImage}
+                className="group relative flex items-center justify-center space-x-3 px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-blue-500/25"
+              >
+                <Download className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                <span>Download Image</span>
+              </button>
+              
+              <button
+                onClick={generateAnother}
+                className="group relative flex items-center justify-center space-x-3 px-8 py-4 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl font-semibold hover:from-gray-700 hover:to-gray-800 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-gray-500/25"
+              >
+                <RefreshCw className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                <span>Generate Another</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Model Download Modal */}
+      <ModelDownloadModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        missingModels={getMissingModels('image', 'stable-diffusion')}
+        modelType="image"
+        onModelsDownloaded={() => {
+          checkModels();
+          setShowDownloadModal(false);
+        }}
       />
+
     </div>
   );
 }

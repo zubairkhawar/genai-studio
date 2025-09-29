@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Volume2, Settings, Loader2, Sparkles } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useGenerating } from '@/contexts/GeneratingContext';
+import { useModelCheck } from '@/hooks/useModelCheck';
+import ModelDownloadModal from '@/components/ModelDownloadModal';
 import { getApiUrl } from '@/config';
 
 export default function Page() {
@@ -27,6 +29,10 @@ export default function Page() {
   const [savedVoices, setSavedVoices] = useState<any[]>([]);
   const colors = useThemeColors();
   const { startGenerating, stopGenerating } = useGenerating();
+  
+  // Model checking
+  const { getMissingModels, checkModels } = useModelCheck();
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const fetchVoicePreviews = async () => {
     try {
@@ -80,6 +86,13 @@ export default function Page() {
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
+    
+    // Check if required models are available
+    const missingModels = getMissingModels('audio', settings.model);
+    if (missingModels.length > 0) {
+      setShowDownloadModal(true);
+      return;
+    }
     
     setIsGenerating(true);
     
@@ -388,6 +401,18 @@ export default function Page() {
           </div>
         </div>
       </div>
+
+      {/* Model Download Modal */}
+      <ModelDownloadModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        missingModels={getMissingModels('audio', settings.model)}
+        modelType="audio"
+        onModelsDownloaded={() => {
+          checkModels();
+          setShowDownloadModal(false);
+        }}
+      />
     </div>
   );
 }

@@ -185,15 +185,15 @@ def download_model(model_id: str, force: bool = False) -> bool:
     return download_model_with_retry(model_id, force, max_retries=3)
     
 def download_bark_preset_audios() -> bool:
-    """Download Bark preset audio files for voice previews"""
+    """Download Bark preset audio files for voice previews - ENGLISH ONLY"""
     try:
-        logger.info("🎵 Downloading Bark preset audio files...")
+        logger.info("🎵 Downloading Bark preset audio files (English only)...")
         
         # Create preset audio directory
         preset_dir = pathlib.Path("../models/audio/bark/preset-audios")
         preset_dir.mkdir(parents=True, exist_ok=True)
         
-        # English voice presets with their audio URLs
+        # ENGLISH ONLY voice presets with their audio URLs
         preset_audios = [
             {
                 "id": "v2/en_speaker_0",
@@ -291,7 +291,11 @@ def download_bark_preset_audios() -> bool:
                 continue
         
         if downloaded_count > 0:
-            logger.info(f"✅ Downloaded {downloaded_count} Bark preset audio sets")
+            logger.info(f"✅ Downloaded {downloaded_count} Bark preset audio sets (English only)")
+            
+            # Clean up any non-English preset files to save space
+            cleanup_non_english_presets(preset_dir)
+            
             return True
         else:
             logger.warning("⚠️  No Bark preset audios were downloaded")
@@ -300,6 +304,94 @@ def download_bark_preset_audios() -> bool:
     except Exception as e:
         logger.error(f"❌ Bark preset audio download failed: {e}")
         return False
+
+def cleanup_non_english_presets(preset_dir: pathlib.Path) -> None:
+    """Remove non-English preset files to save space"""
+    try:
+        logger.info("🧹 Cleaning up non-English Bark presets...")
+        
+        # List of non-English language prefixes to remove
+        non_english_prefixes = [
+            "de_speaker_",  # German
+            "es_speaker_",  # Spanish
+            "fr_speaker_",  # French
+            "hi_speaker_",  # Hindi
+            "it_speaker_",  # Italian
+            "ja_speaker_",  # Japanese
+            "ko_speaker_",  # Korean
+            "pl_speaker_",  # Polish
+            "pt_speaker_",  # Portuguese
+            "ru_speaker_",  # Russian
+            "tr_speaker_",  # Turkish
+            "zh_speaker_",  # Chinese
+            "speaker_",     # Generic speakers (non-v2)
+            "announcer"     # Announcer voice
+        ]
+        
+        removed_count = 0
+        for prefix in non_english_prefixes:
+            # Remove .npz files
+            for file_path in preset_dir.glob(f"{prefix}*.npz"):
+                try:
+                    file_path.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Could not remove {file_path}: {e}")
+            
+            # Remove .mp3 files
+            for file_path in preset_dir.glob(f"{prefix}*.mp3"):
+                try:
+                    file_path.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Could not remove {file_path}: {e}")
+        
+        if removed_count > 0:
+            logger.info(f"✅ Removed {removed_count} non-English preset files")
+        else:
+            logger.info("ℹ️  No non-English preset files found to remove")
+            
+    except Exception as e:
+        logger.warning(f"⚠️  Could not clean up non-English presets: {e}")
+
+def cleanup_non_english_embeddings(embeddings_dir: pathlib.Path) -> None:
+    """Remove non-English speaker embedding files to save space"""
+    try:
+        logger.info("🧹 Cleaning up non-English Bark speaker embeddings...")
+        
+        # List of non-English language prefixes to remove
+        non_english_prefixes = [
+            "de_speaker_",  # German
+            "es_speaker_",  # Spanish
+            "fr_speaker_",  # French
+            "hi_speaker_",  # Hindi
+            "it_speaker_",  # Italian
+            "ja_speaker_",  # Japanese
+            "ko_speaker_",  # Korean
+            "pl_speaker_",  # Polish
+            "pt_speaker_",  # Portuguese
+            "ru_speaker_",  # Russian
+            "tr_speaker_",  # Turkish
+            "zh_speaker_",  # Chinese
+            "announcer"     # Announcer voice
+        ]
+        
+        removed_count = 0
+        for prefix in non_english_prefixes:
+            for file_path in embeddings_dir.glob(f"{prefix}*.npy"):
+                try:
+                    file_path.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Could not remove {file_path}: {e}")
+        
+        if removed_count > 0:
+            logger.info(f"✅ Removed {removed_count} non-English embedding files")
+        else:
+            logger.info("ℹ️  No non-English embedding files found to remove")
+            
+    except Exception as e:
+        logger.warning(f"⚠️  Could not clean up non-English embeddings: {e}")
 
 def download_bark_models() -> bool:
     """Special handling for Bark models"""
@@ -326,6 +418,13 @@ def download_bark_models() -> bool:
                 # Download preset audios after successful model setup
                 download_bark_preset_audios()
                 
+                # Clean up non-English embeddings if they exist in local directory
+                local_bark_dir = pathlib.Path("../models/audio/bark")
+                if local_bark_dir.exists():
+                    embeddings_dir = local_bark_dir / "speaker_embeddings"
+                    if embeddings_dir.exists():
+                        cleanup_non_english_embeddings(embeddings_dir)
+                
                 return True
             else:
                 raise Exception("Bark cache not found after preload")
@@ -337,6 +436,13 @@ def download_bark_models() -> bool:
             if success:
                 # Download preset audios after successful model download
                 download_bark_preset_audios()
+                
+                # Clean up non-English embeddings if they exist in local directory
+                local_bark_dir = pathlib.Path("../models/audio/bark")
+                if local_bark_dir.exists():
+                    embeddings_dir = local_bark_dir / "speaker_embeddings"
+                    if embeddings_dir.exists():
+                        cleanup_non_english_embeddings(embeddings_dir)
             return success
             
     except Exception as e:
@@ -401,7 +507,7 @@ def download_animatediff_models() -> bool:
 
         
 def verify_model_integrity(model_id: str) -> bool:
-    """Verify that a model download is complete and not corrupted"""
+    """Verify that a model download is complete and not corrupted with comprehensive file checking"""
     if model_id not in MODELS:
         return False
     
@@ -417,6 +523,7 @@ def verify_model_integrity(model_id: str) -> bool:
         + list(local_dir.rglob("*.bin"))
         + list(local_dir.rglob("*.pt"))
         + list(local_dir.rglob("*.pth"))
+        + list(local_dir.rglob("*.ckpt"))
     )
     
     config_files = (
@@ -425,6 +532,101 @@ def verify_model_integrity(model_id: str) -> bool:
         + list(local_dir.rglob("*.yaml"))
         + list(local_dir.rglob("*.yml"))
     )
+    
+    # Model-specific verification
+    if model_id == "stable_diffusion":
+        # Check for specific Stable Diffusion files
+        required_files = [
+            "model_index.json",
+            "v1-inference.yaml"
+        ]
+        required_dirs = [
+            "text_encoder",
+            "unet", 
+            "vae",
+            "scheduler",
+            "tokenizer"
+        ]
+        
+        missing_files = []
+        for req_file in required_files:
+            if not (local_dir / req_file).exists():
+                missing_files.append(req_file)
+        
+        missing_dirs = []
+        for req_dir in required_dirs:
+            if not (local_dir / req_dir).exists():
+                missing_dirs.append(req_dir)
+        
+        if missing_files or missing_dirs:
+            logger.warning(f"⚠️  {config['name']}: Missing required files/dirs: {missing_files + missing_dirs}")
+            return False
+    
+    elif model_id == "animatediff":
+        # Check for AnimateDiff specific files
+        required_files = [
+            "config.json",
+            "README.md"
+        ]
+        
+        missing_files = []
+        for req_file in required_files:
+            if not (local_dir / req_file).exists():
+                missing_files.append(req_file)
+        
+        if missing_files:
+            logger.warning(f"⚠️  {config['name']}: Missing required files: {missing_files}")
+            return False
+    
+    elif model_id == "bark":
+        # Check for Bark specific files
+        required_files = [
+            "config.json",
+            "generation_config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "vocab.txt",
+            "special_tokens_map.json",
+            "speaker_embeddings_path.json"
+        ]
+        
+        # Check for core model files
+        core_models = ["coarse.pt", "fine.pt"]
+        if (local_dir / "coarse_2.pt").exists():
+            core_models.append("coarse_2.pt")
+        if (local_dir / "fine_2.pt").exists():
+            core_models.append("fine_2.pt")
+        
+        missing_files = []
+        for req_file in required_files + core_models:
+            if not (local_dir / req_file).exists():
+                missing_files.append(req_file)
+        
+        # Check for English speaker embeddings (only English, not all languages)
+        speaker_embeddings_dir = local_dir / "speaker_embeddings"
+        if speaker_embeddings_dir.exists():
+            english_embeddings = list(speaker_embeddings_dir.glob("en_speaker_*_*.npy"))
+            if len(english_embeddings) < 20:  # Should have at least 10 speakers × 2 embedding types
+                logger.warning(f"⚠️  {config['name']}: Missing English speaker embeddings (found {len(english_embeddings)})")
+                return False
+        else:
+            logger.warning(f"⚠️  {config['name']}: Missing speaker_embeddings directory")
+            return False
+        
+        # Check for English preset audios only
+        preset_audios_dir = local_dir / "preset-audios"
+        if preset_audios_dir.exists():
+            english_presets = list(preset_audios_dir.glob("en_speaker_*.npz"))
+            if len(english_presets) < 10:  # Should have 10 English speakers
+                logger.warning(f"⚠️  {config['name']}: Missing English preset audios (found {len(english_presets)})")
+                return False
+        else:
+            logger.warning(f"⚠️  {config['name']}: Missing preset-audios directory")
+            return False
+        
+        if missing_files:
+            logger.warning(f"⚠️  {config['name']}: Missing required files: {missing_files}")
+            return False
     
     # Must have at least one weight file
     if len(weight_files) == 0:
@@ -485,8 +687,6 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
             # Download the model
             if model_id == "bark":
                 success = download_bark_models()
-            elif model_id == "xtts-v2":
-                success = download_xtts_models()
             elif model_id == "animatediff":
                 success = download_animatediff_models()
             elif model_id == "animatediff_motion_adapter":

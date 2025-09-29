@@ -150,6 +150,12 @@ def check_existing_models():
         # Special-case: Bark stores weights in user cache (~/.cache/suno/bark_v0)
         if model_key == "bark":
             bark_cache = pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
+            local_bark_dir = pathlib.Path(model_info["local_dir"])
+            
+            # Check both cache and local directory
+            bark_available = False
+            
+            # Check cache first
             if bark_cache.exists():
                 weight_files = list(bark_cache.rglob("*.pt")) + list(bark_cache.rglob("*.pth")) + list(bark_cache.rglob("*.bin")) + list(bark_cache.rglob("*.safetensors"))
                 if len(weight_files) > 0:
@@ -162,7 +168,23 @@ def check_existing_models():
                         "files_verified": True
                     })
                     print(f"✅ Bark models found in cache ({size_mb:.1f} MB)")
-                    continue
+                    bark_available = True
+            
+            # Also check local directory for complete Bark setup
+            if local_bark_dir.exists():
+                # Check for English-only preset audios and speaker embeddings
+                preset_audios_dir = local_bark_dir / "preset-audios"
+                speaker_embeddings_dir = local_bark_dir / "speaker_embeddings"
+                
+                english_presets = list(preset_audios_dir.glob("en_speaker_*.npz")) if preset_audios_dir.exists() else []
+                english_embeddings = list(speaker_embeddings_dir.glob("en_speaker_*_*.npy")) if speaker_embeddings_dir.exists() else []
+                
+                if len(english_presets) >= 10 and len(english_embeddings) >= 20:
+                    print(f"✅ Bark local setup complete (English only: {len(english_presets)} presets, {len(english_embeddings)} embeddings)")
+                    bark_available = True
+            
+            if bark_available:
+                continue
 
         if local_dir.exists():
             # Check for actual model weight files
