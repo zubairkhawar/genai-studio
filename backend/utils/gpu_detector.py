@@ -89,6 +89,19 @@ class GPUDetector:
                 for line in lines:
                     if 'Card series' in line:
                         return line.split(':')[1].strip()
+            
+            # Try alternative method for newer ROCm versions
+            result = subprocess.run(['rocm-smi', '--showid'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if 'GPU[0]' in line:
+                        # Extract GPU name from the line
+                        parts = line.split()
+                        for part in parts:
+                            if '7900' in part or 'XTX' in part or 'RX' in part:
+                                return f"AMD {part}"
         except Exception:
             pass
         return "AMD GPU"
