@@ -88,7 +88,7 @@ tmp/
 temp/
 
 # Generated outputs
-outputs/
+/outputs/
 models/
 *.mp4
 *.wav
