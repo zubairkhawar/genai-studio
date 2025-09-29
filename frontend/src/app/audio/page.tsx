@@ -604,9 +604,14 @@ export default function Page() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="p-3 rounded-lg bg-accent-violet/5 border border-accent-violet/20">
                     <p className={`text-xs font-medium ${colors.text.primary} mb-2`}>Example with emotions:</p>
-                    <p className={`text-xs ${colors.text.secondary} italic`}>
+                    <p className={`text-xs ${colors.text.secondary} italic mb-2`}>
                       "Welcome to our presentation! [laughter] Today we'll explore some exciting topics. [sighs] Let's begin with the basics."
                     </p>
+                    <div className="p-2 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                      <p className={`text-xs font-medium text-yellow-800 dark:text-yellow-200`}>
+                        ⚠️ Note: Only Speaker 6 (EN) - English Male supports emotions. Other voices will ignore emotion tags.
+                      </p>
+                    </div>
                   </div>
                   <div className="p-3 rounded-lg bg-accent-blue/5 border border-accent-blue/20">
                     <p className={`text-xs font-medium ${colors.text.primary} mb-2`}>Available emotions:</p>
