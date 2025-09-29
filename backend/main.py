@@ -80,19 +80,7 @@ download_status = {
             "name": "AnimateDiff Official Repository",
             "repo_id": "guoyww/AnimateDiff",
             "local_dir": "../models/video/animatediff",
-            "size_gb": 5.0,
-            "status": "pending",
-            "progress": 0,
-            "downloaded_mb": 0,
-            "speed_mbps": 0,
-            "eta_seconds": 0,
-            "files_verified": False
-        },
-        "animatediff_motion_adapter": {
-            "name": "AnimateDiff Motion Adapter v1.5.2",
-            "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
-            "local_dir": "../models/video/animatediff/motion_adapter",
-            "size_gb": 2.0,
+            "size_gb": 7.0,
             "status": "pending",
             "progress": 0,
             "downloaded_mb": 0,
@@ -171,7 +159,31 @@ def check_existing_models():
             # Check for actual model weight files
             weight_files = list(local_dir.rglob("*.safetensors")) + list(local_dir.rglob("*.bin")) + list(local_dir.rglob("*.pt")) + list(local_dir.rglob("*.pth"))
             
-            if len(weight_files) > 0:
+            # Special check for AnimateDiff - ensure we have both main model and motion adapter files
+            if model_key == "animatediff":
+                motion_adapter_files = list(local_dir.rglob("*motion*")) + list(local_dir.rglob("*adapter*"))
+                if len(weight_files) > 0 and len(motion_adapter_files) > 0:
+                    # Calculate total size
+                    total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
+                    size_mb = total_size / (1024 * 1024)
+                    
+                    download_status["models"][model_key].update({
+                        "status": "done",
+                        "progress": 100,
+                        "downloaded_mb": size_mb,
+                        "files_verified": True
+                    })
+                    print(f"✅ {model_info['name']} already downloaded ({size_mb:.1f} MB)")
+                else:
+                    # Missing motion adapter files
+                    download_status["models"][model_key].update({
+                        "status": "pending",
+                        "progress": 0,
+                        "downloaded_mb": 0,
+                        "files_verified": False
+                    })
+                    print(f"⚠️  {model_info['name']} found but motion adapter files missing - will re-download")
+            elif len(weight_files) > 0:
                 # Calculate total size
                 total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
                 size_mb = total_size / (1024 * 1024)
@@ -700,6 +712,45 @@ async def delete_output_file(file_type: str, filename: str):
         return {"message": f"File {filename} deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+@app.post("/outputs/{file_type}/{filename}/rename")
+async def rename_output_file(file_type: str, filename: str, new_name: str = Form(...)):
+    """Rename a specific output file"""
+    if file_type not in ['videos', 'audio', 'image']:
+        raise HTTPException(status_code=400, detail="Invalid file type. Must be 'videos', 'audio', or 'image'")
+    
+    # Handle image files which are in the main outputs directory
+    if file_type == 'image':
+        file_path = pathlib.Path(f'../outputs/{filename}')
+        new_file_path = pathlib.Path(f'../outputs/{new_name}')
+    else:
+        file_path = pathlib.Path(f'../outputs/{file_type}/{filename}')
+        new_file_path = pathlib.Path(f'../outputs/{file_type}/{new_name}')
+    
+    print(f"Looking for file at: {file_path.absolute()}")
+    print(f"File exists: {file_path.exists()}")
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File {filename} not found at {file_path.absolute()}")
+    
+    if new_file_path.exists():
+        raise HTTPException(status_code=400, detail=f"File {new_name} already exists")
+    
+    try:
+        # Preserve file extension
+        original_ext = file_path.suffix
+        if not new_name.endswith(original_ext):
+            new_name = f"{new_name}{original_ext}"
+            new_file_path = pathlib.Path(f'../outputs/{file_type}/{new_name}')
+        
+        print(f"Renaming from: {file_path.absolute()}")
+        print(f"Renaming to: {new_file_path.absolute()}")
+        
+        file_path.rename(new_file_path)
+        return {"message": f"File renamed from {filename} to {new_name}", "new_filename": new_name}
+    except Exception as e:
+        print(f"Rename error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")
 
 @app.get("/models")
 async def get_available_models():
@@ -1251,7 +1302,6 @@ async def delete_model(model_name: str):
         model_paths = {
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
             "animatediff": pathlib.Path("../models/video/animatediff"),
-            "animatediff_motion_adapter": pathlib.Path("../models/video/animatediff/motion_adapter"),
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
         }
         

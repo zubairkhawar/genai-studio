@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Volume2, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2, Play, Pause } from 'lucide-react';
+import { Volume2, Download, RefreshCw, Settings, CheckCircle, Clock, Loader2, Play, Pause, Sparkles } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { getApiUrl } from '@/config';
 
@@ -474,9 +474,9 @@ export default function Page() {
     switch (status) {
       case 'completed': return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'processing': return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
-      case 'queued': return <Clock className="h-5 w-5 text-yellow-500" />;
+      case 'queued': return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
       case 'failed': return <div className="h-5 w-5 rounded-full bg-red-500" />;
-      default: return <Clock className="h-5 w-5 text-gray-500" />;
+      default: return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
     }
   };
 
@@ -484,9 +484,9 @@ export default function Page() {
     switch (status) {
       case 'completed': return 'Completed';
       case 'processing': return 'Generating...';
-      case 'queued': return 'Queued';
+      case 'queued': return 'Generating...';
       case 'failed': return 'Failed';
-      default: return 'Unknown';
+      default: return 'Generating...';
     }
   };
 
@@ -834,42 +834,10 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="space-y-4">
-              <div className="relative">
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="bg-gradient-to-r from-violet-500 via-purple-500 to-blue-500 h-3 rounded-full transition-all duration-700 ease-out relative"
-                    style={{ width: `${currentResult.progress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {currentResult.progress}% complete
-                  </span>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {currentResult.status === 'processing' ? 'Generating audio...' : 
-                     currentResult.status === 'queued' ? 'Preparing...' : 'Processing...'}
-                  </span>
-                </div>
-              </div>
-            </div>
 
             {/* Settings Display */}
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Sample Rate:</span>
-                  <p className="font-medium">22,050 Hz (Bark Optimal)</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Voice Style:</span>
-                  <p className="font-medium">
-                    {currentResult.settings.voiceStyle === 'auto' ? 'Auto-detected' : currentResult.settings.voiceStyle}
-                  </p>
-                </div>
                 <div>
                   <span className="text-gray-500">Voice ID:</span>
                   <p className="font-medium">
@@ -901,78 +869,92 @@ export default function Page() {
     if (!currentResult) return null;
 
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-accent-violet to-accent-blue bg-clip-text text-transparent mb-2">
-            Audio Generated!
+      <div className="max-w-5xl mx-auto px-4">
+        {/* Success Header */}
+        <div className="text-center mb-12">
+          <div className="relative inline-block mb-6">
+            <div className="w-20 h-20 mx-auto bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-2xl">
+              <CheckCircle className="h-12 w-12 text-white" />
+            </div>
+            <div className="absolute inset-0 w-20 h-20 mx-auto rounded-full bg-gradient-to-r from-green-400 to-emerald-500 animate-ping opacity-20"></div>
+          </div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 bg-clip-text text-transparent mb-3">
+            Audio Generated Successfully!
           </h1>
-          <p className={`text-lg ${colors.text.secondary}`}>
-            Your audio is ready for download
+          <p className="text-xl text-gray-600 dark:text-gray-300">
+            Your audio is ready to play and download
           </p>
         </div>
 
-        <div className={`p-8 rounded-2xl border shadow-xl bg-white dark:bg-gradient-to-br dark:from-dark-card/90 dark:to-dark-bg-secondary/50 backdrop-blur-md`}>
-          <div className="space-y-6">
-            {/* Prompt Display */}
-            <div>
-              <p className={`text-sm ${colors.text.secondary} mb-2`}>Generated:</p>
-              <p className={`${colors.text.primary} font-medium text-lg`}>{currentResult.prompt}</p>
+        {/* Main Content Card */}
+        <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {/* Prompt Section */}
+          <div className="bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-blue-500/10 p-8 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-start space-x-4">
+              <div className="flex-shrink-0">
+                <div className="w-12 h-12 bg-gradient-to-r from-violet-500 to-blue-500 rounded-xl flex items-center justify-center">
+                  <Volume2 className="h-6 w-6 text-white" />
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Generated Text</h3>
+                <p className="text-gray-700 dark:text-gray-300 text-lg leading-relaxed bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-600">
+                  "{currentResult.prompt}"
+                </p>
+              </div>
             </div>
+          </div>
 
-              {/* Audio Preview */}
-            {currentResult.status === 'completed' && currentResult.outputFile && (
-              <div className="text-center">
-                <div className="bg-gradient-to-br from-violet-50 to-blue-50 dark:from-violet-900/20 dark:to-blue-900/20 p-8 rounded-2xl border border-violet-200 dark:border-violet-800 max-w-2xl mx-auto">
-                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6">🎵 Your Generated Audio</h3>
-                  
-                  {/* Custom Audio Player */}
-                  <div className="flex items-center justify-center space-x-6 p-6 rounded-xl bg-white dark:bg-gray-800 shadow-lg mb-6">
+          {/* Audio Player Section */}
+          {currentResult.status === 'completed' && currentResult.outputFile && (
+            <div className="p-8">
+              <div className="max-w-3xl mx-auto">
+                <h3 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-8">
+                  🎵 Your Generated Audio
+                </h3>
+                
+                {/* Enhanced Audio Player */}
+                <div className="bg-gradient-to-br from-violet-50 via-purple-50 to-blue-50 dark:from-violet-900/20 dark:via-purple-900/20 dark:to-blue-900/20 rounded-2xl p-8 border border-violet-200 dark:border-violet-800">
+                  {/* Main Play Button */}
+                  <div className="flex flex-col items-center space-y-6">
                     <button
                       onClick={() => toggleAudio(currentResult.id, getApiUrl(currentResult.outputFile!.replace('../outputs', '/outputs')))}
-                      className="flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-r from-violet-500 to-blue-500 text-white hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+                      className="group relative flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-blue-500 text-white shadow-2xl hover:shadow-violet-500/25 transition-all duration-300 hover:scale-105"
                     >
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-violet-500 via-purple-500 to-blue-500 animate-pulse opacity-20 group-hover:opacity-30"></div>
                       {playingAudio === currentResult.id ? (
-                        <Pause className="h-12 w-12" />
+                        <Pause className="h-16 w-16 relative z-10" />
                       ) : (
-                        <Play className="h-12 w-12 ml-1" />
+                        <Play className="h-16 w-16 ml-2 relative z-10" />
                       )}
                     </button>
                     
-                    <div className="flex-1 space-y-3">
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                    <div className="text-center">
+                      <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {playingAudio === currentResult.id ? 'Now Playing...' : 'Click to play your audio'}
+                      </p>
+                      <div className="w-64 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                         <div 
-                          className="bg-gradient-to-r from-violet-500 to-blue-500 h-4 rounded-full transition-all duration-300" 
+                          className="bg-gradient-to-r from-violet-500 to-blue-500 h-2 rounded-full transition-all duration-300" 
                           style={{ width: playingAudio === currentResult.id ? '100%' : '0%' }}
                         ></div>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {playingAudio === currentResult.id ? 'Playing...' : 'Click to play your audio'}
-                      </p>
                     </div>
                   </div>
 
-                  {/* Fallback HTML5 Audio Player */}
-                  <div className="mb-6">
-                    <p className="text-sm text-gray-500 mb-3">Or use the standard audio player:</p>
-                    <audio
-                      controls
-                      className="w-full rounded-lg shadow-lg"
-                      src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
-                      preload="metadata"
-                    >
-                      Your browser does not support the audio element.
-                    </audio>
-                  </div>
-                  
-                  <div className="flex justify-center space-x-3">
-                    <a
-                      href={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
-                      download
-                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-violet-500 to-blue-500 text-white rounded-lg hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
-                    >
-                      <Download className="h-5 w-5 mr-2" />
-                      Download Audio
-                    </a>
+                  {/* Standard Audio Player */}
+                  <div className="mt-8">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 text-center">Standard Audio Player</p>
+                      <audio
+                        controls
+                        className="w-full rounded-lg"
+                        src={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
+                        preload="metadata"
+                      >
+                        Your browser does not support the audio element.
+                      </audio>
+                    </div>
                   </div>
                   
                   {/* Hidden audio element for custom player */}
@@ -998,73 +980,80 @@ export default function Page() {
                   />
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Error Display */}
-            {currentResult.status === 'failed' && currentResult.error && (
-              <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                <p className="text-red-600 dark:text-red-400 text-sm">{currentResult.error}</p>
-              </div>
-            )}
-
-            {/* Settings Display */}
-            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Sample Rate:</span>
-                  <p className="font-medium">22,050 Hz (Bark Optimal)</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Voice Style:</span>
-                  <p className="font-medium">
-                    {currentResult.settings.voiceStyle === 'auto' ? 'Auto-detected' : currentResult.settings.voiceStyle}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Voice ID:</span>
-                  <p className="font-medium">
-                    {settings.voiceId ? barkVoices?.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Format:</span>
-                  <p className="font-medium">{currentResult.settings.format.toUpperCase()}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Model:</span>
-                  <p className="font-medium">
-                    {settings.model === 'xtts-v2' ? 'XTTS-v2' :
-                     settings.model === 'bark' ? 'Bark TTS' :
-                     settings.model}
-                  </p>
+          {/* Error Display */}
+          {currentResult.status === 'failed' && currentResult.error && (
+            <div className="p-8">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6">
+                <div className="flex items-center space-x-3">
+                  <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0" />
+                  <p className="text-red-700 dark:text-red-400 font-medium">{currentResult.error}</p>
                 </div>
               </div>
             </div>
+          )}
 
-              {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {/* Settings Display */}
+          <div className="bg-gray-50 dark:bg-gray-800 p-8">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6 text-center">Generation Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-2xl mx-auto">
+              <div className="text-center p-4 bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                <div className="w-12 h-12 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                  <Volume2 className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Voice</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  {settings.voiceId ? barkVoices?.find(v => v.id === settings.voiceId)?.name || settings.voiceId : 'Auto-selected'}
+                </p>
+              </div>
+              <div className="text-center p-4 bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Model</p>
+                <p className="font-semibold text-gray-900 dark:text-white">
+                  {settings.model === 'xtts-v2' ? 'XTTS-v2' :
+                   settings.model === 'bark' ? 'Bark TTS' :
+                   settings.model}
+                </p>
+              </div>
+              <div className="text-center p-4 bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600">
+                <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center mx-auto mb-3">
+                  <Download className="h-6 w-6 text-white" />
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Format</p>
+                <p className="font-semibold text-gray-900 dark:text-white">{currentResult.settings.format.toUpperCase()}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="p-8 bg-gradient-to-r from-violet-500/5 via-purple-500/5 to-blue-500/5">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
               {currentResult.status === 'completed' && currentResult.outputFile && (
-                  <a
+                <a
                   href={getApiUrl(currentResult.outputFile.replace('../outputs', '/outputs'))}
-                    download
-                  className="flex items-center justify-center space-x-2 px-6 py-3 bg-accent-violet text-white rounded-lg hover:bg-accent-violet/90 transition-colors"
-                  >
+                  download
+                  className="flex items-center justify-center space-x-3 px-8 py-4 bg-gradient-to-r from-violet-500 to-blue-500 text-white rounded-xl font-semibold hover:from-violet-600 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-105"
+                >
                   <Download className="h-5 w-5" />
                   <span>Download Audio</span>
-                  </a>
+                </a>
               )}
-                  <button
-                    onClick={() => {
+              <button
+                onClick={() => {
                   setPrompt('');
                   setCurrentStep('prompt');
                   setCurrentJobId(null);
                   setResults([]);
                 }}
-                className="flex items-center justify-center space-x-2 px-6 py-3 border border-accent-violet/30 text-accent-violet rounded-lg hover:bg-accent-violet/10 transition-colors"
+                className="flex items-center justify-center space-x-3 px-8 py-4 border-2 border-violet-500/30 text-violet-600 dark:text-violet-400 rounded-xl font-semibold hover:bg-violet-500/10 transition-all duration-300 hover:scale-105"
               >
                 <RefreshCw className="h-5 w-5" />
                 <span>Generate Another</span>
-                  </button>
+              </button>
             </div>
           </div>
         </div>

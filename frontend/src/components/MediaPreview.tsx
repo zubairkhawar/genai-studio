@@ -1,7 +1,7 @@
 'use client';
 
-// import { useState } from 'react';
-import { Download, Volume2, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Volume2, Sparkles, AlertCircle, Loader2, Edit3, Check, X } from 'lucide-react';
 import { useThemeColors } from '@/hooks/useThemeColors';
 
 interface Job {
@@ -22,8 +22,8 @@ interface MediaPreviewProps {
 }
 
 export function MediaPreview({ job }: MediaPreviewProps) {
-  // const [isPlaying, setIsPlaying] = useState(false);
-  // const [isMuted, setIsMuted] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedFileName, setEditedFileName] = useState('');
   const colors = useThemeColors();
 
   const handleDownload = () => {
@@ -35,6 +35,55 @@ export function MediaPreview({ job }: MediaPreviewProps) {
       link.click();
       document.body.removeChild(link);
     }
+  };
+
+  const handleRenameStart = () => {
+    const fileName = job.output_file?.split('/').pop() || 'output';
+    const nameWithoutExt = fileName.split('.').slice(0, -1).join('.');
+    setEditedFileName(nameWithoutExt);
+    setIsEditing(true);
+  };
+
+  const handleRenameSave = async () => {
+    if (!editedFileName.trim()) return;
+    
+    const fileName = job.output_file?.split('/').pop() || 'output';
+    const fileExt = fileName.split('.').pop() || '';
+    const newFileName = `${editedFileName.trim()}.${fileExt}`;
+    
+    try {
+      // Determine file type from the job
+      const fileType = job.model_type === 'video' ? 'videos' : 
+                      job.model_type === 'audio' ? 'audio' : 'image';
+      
+      const formData = new FormData();
+      formData.append('new_name', newFileName);
+      
+      const response = await fetch(`http://localhost:8000/outputs/${fileType}/${fileName}/rename`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('File renamed successfully:', result);
+        setIsEditing(false);
+        // Optionally refresh the job data or update the UI
+        alert('File renamed successfully!');
+      } else {
+        const error = await response.json();
+        console.error('Failed to rename file:', error.detail);
+        alert(`Failed to rename file: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Failed to rename file:', error);
+      alert('Failed to rename file. Please try again.');
+    }
+  };
+
+  const handleRenameCancel = () => {
+    setIsEditing(false);
+    setEditedFileName('');
   };
 
   // Media controls would be implemented here
@@ -180,7 +229,58 @@ export function MediaPreview({ job }: MediaPreviewProps) {
             <span>{job.model_name}</span>
           </div>
           <span>•</span>
-          <span className="font-mono">{fileName}</span>
+          <div className="flex items-center space-x-2">
+            {isEditing ? (
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    value={editedFileName}
+                    onChange={(e) => {
+                      // Prevent dots and file extensions
+                      const value = e.target.value.replace(/[.]/g, '');
+                      setEditedFileName(value);
+                    }}
+                    className="px-2 py-1 text-sm font-mono bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-l"
+                    autoFocus
+                    placeholder="Enter filename"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameSave();
+                      if (e.key === 'Escape') handleRenameCancel();
+                    }}
+                  />
+                  <span className="px-2 py-1 text-sm font-mono bg-gray-100 dark:bg-gray-700 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r text-gray-500">
+                    .{fileName.split('.').pop()}
+                  </span>
+                </div>
+                <button
+                  onClick={handleRenameSave}
+                  className="p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20 rounded"
+                  title="Save"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleRenameCancel}
+                  className="p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded"
+                  title="Cancel"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <span className="font-mono">{fileName}</span>
+                <button
+                  onClick={handleRenameStart}
+                  className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                  title="Rename file"
+                >
+                  <Edit3 className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         
         <button
