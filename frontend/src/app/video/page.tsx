@@ -24,9 +24,6 @@ export default function Page() {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [generationMode, setGenerationMode] = useState<'text-to-video' | 'image-to-video'>('text-to-video');
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const colors = useThemeColors();
   const { startGenerating, stopGenerating } = useGenerating();
 
@@ -68,18 +65,6 @@ export default function Page() {
       fps: 8,
       estimatedTime: '2-4min'
     },
-    'ultra-quality': {
-      name: 'Ultra Quality',
-      description: 'Maximum quality, requires high-end GPU',
-      width: 768,
-      height: 768,
-      numFrames: 32,
-      numInferenceSteps: 40,
-      guidanceScale: 8.0,
-      motionScale: 1.6,
-      fps: 8,
-      estimatedTime: '5-10min'
-    }
   };
 
   const applyPreset = (presetKey: keyof typeof presets) => {
@@ -126,22 +111,6 @@ export default function Page() {
     }
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setUploadedImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removeImage = () => {
-    setUploadedImage(null);
-    setImagePreview(null);
-  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -203,33 +172,6 @@ export default function Page() {
       </div>
 
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Generation Mode Toggle */}
-        <div className="flex justify-center">
-          <div className="bg-gray-100 dark:bg-slate-700 rounded-xl p-1">
-            <button
-              onClick={() => setGenerationMode('text-to-video')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                generationMode === 'text-to-video'
-                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Type className="h-4 w-4 inline mr-2" />
-              Text to Video
-            </button>
-            <button
-              onClick={() => setGenerationMode('image-to-video')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                generationMode === 'image-to-video'
-                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-              }`}
-            >
-              <Upload className="h-4 w-4 inline mr-2" />
-              Image to Video
-            </button>
-          </div>
-        </div>
 
         {/* Main Generation Form */}
         <div className="bg-white dark:bg-slate-800/50 rounded-2xl border p-8">
@@ -237,64 +179,17 @@ export default function Page() {
             {/* Prompt Input */}
             <div>
               <label className="block text-sm font-semibold mb-3 text-gray-900 dark:text-white">
-                {generationMode === 'text-to-video' ? 'Text Prompt' : 'Video Description'}
+                Text Prompt
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={4}
-                placeholder={generationMode === 'text-to-video' 
-                  ? "Describe the video you want to generate..." 
-                  : "Describe how you want the image to animate..."}
+                placeholder="Describe the video you want to generate..."
                 className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-accent-blue focus:border-transparent transition-all duration-200"
               />
             </div>
 
-            {/* Image Upload for Image-to-Video */}
-            {generationMode === 'image-to-video' && (
-              <div>
-                <label className="block text-sm font-semibold mb-3 text-gray-900 dark:text-white">
-                  Upload Image
-                </label>
-                {!imagePreview ? (
-                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center hover:border-accent-blue transition-colors">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      id="image-upload"
-                    />
-                    <label
-                      htmlFor="image-upload"
-                      className="cursor-pointer flex flex-col items-center space-y-2"
-                    >
-                      <Upload className="h-8 w-8 text-gray-400" />
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Click to upload an image or drag and drop
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        PNG, JPG, GIF up to 10MB
-                      </span>
-                    </label>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Uploaded"
-                      className="w-full max-w-md mx-auto rounded-xl shadow-lg"
-                    />
-                    <button
-                      onClick={removeImage}
-                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Settings */}
             <div>
