@@ -1,231 +1,281 @@
-# Text-to-Media App
+# 🎬 GenStudio - AI Text-to-Media Generation Platform
 
-A comprehensive AI-powered application for generating videos, images, and audio from text prompts. Built with modern web technologies and optimized for local deployment.
+A comprehensive AI-powered platform for generating videos, audio, and images from text prompts using state-of-the-art models like AnimateDiff, Bark, and Stable Diffusion.
 
-## 🚀 Features
+## ✨ Features
 
-### 🎥 Video Generation
-- **AnimateDiff** - Perfect for GIF generation with looping animations
-- **Kandinsky 2.2** - Artistic image generation with unique style
-
-### 🎵 Audio Generation
-- **XTTS-v2** - High-quality multi-speaker text-to-speech
-- **Bark** - Creative voice generation with multiple voices
-
-### 🖼️ Image Generation
-- **Stable Diffusion v1.5** - High-quality text-to-image generation
-- **Kandinsky 2.2** - Alternative artistic style
-
-## 🛠️ Technology Stack
-
-### Backend
-- **FastAPI** - Modern Python web framework
-- **PyTorch** - Deep learning framework
-- **Diffusers** - Hugging Face diffusion models
-- **TTS** - Text-to-speech library
-- **OpenCV** - Video processing
-
-### Frontend
-- **Next.js 14** - React framework
-- **TypeScript** - Type-safe JavaScript
-- **Tailwind CSS** - Utility-first CSS
-- **Lucide React** - Beautiful icons
-
-## 📋 Prerequisites
-
-- Python 3.8+
-- Node.js 18+
-- 8GB+ RAM (16GB+ recommended)
-- GPU with 6GB+ VRAM (optional, CPU fallback available)
+- **🎥 Text-to-Video**: Generate videos using AnimateDiff with customizable settings
+- **🎵 Text-to-Audio**: Create speech from text using Bark TTS with multiple voice options
+- **🖼️ Text-to-Image**: Generate images using Stable Diffusion
+- **⚙️ Advanced Settings**: Fine-tune generation parameters for optimal results
+- **📱 Modern UI**: Beautiful, responsive interface with dark/light themes
+- **🔄 Real-time Progress**: Live generation progress tracking
+- **📁 File Management**: Download, preview, and manage generated media
+- **🎛️ Model Management**: Download and manage AI models
 
 ## 🚀 Quick Start
 
-### 1. Clone the Repository
-```bash
-git clone <repository-url>
-cd text-to-media-app
-```
+### Prerequisites
 
-### 2. Backend Setup
+- **Python 3.8+** with pip
+- **Node.js 18+** with npm
+- **Git** (for cloning the repository)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/zubairkhawar/genai-studio.git
+   cd genai-studio
+   ```
+
+2. **Run the setup script:**
+   ```bash
+   ./setup.sh
+   ```
+
+3. **Start the application:**
+   
+   **Backend (Terminal 1):**
+   ```bash
+   cd backend
+   source venv/bin/activate
+   python main.py
+   ```
+   
+   **Frontend (Terminal 2):**
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+
+4. **Access the application:**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+
+## 📋 Manual Setup
+
+If the setup script doesn't work, follow these manual steps:
+
+### Backend Setup
+
 ```bash
 cd backend
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 3. Frontend Setup
+### Frontend Setup
+
 ```bash
 cd frontend
 npm install
 ```
 
-### 4. Download Models
-```bash
-cd backend
-python scripts/download-models.py --priority
-```
-
-### 5. Start the Application
-```bash
-# Terminal 1 - Backend
-cd backend
-python main.py
-
-# Terminal 2 - Frontend
-cd frontend
-npm run dev
-```
-
-Visit `http://localhost:3000` to access the application.
-
-## 📦 Model Management
-
-### Download Models
-The application includes a comprehensive model download system:
+### Directory Structure
 
 ```bash
-# Download all models (~97GB)
-python scripts/download-models.py --all
-
-# Download priority models only (~62GB)
-python scripts/download-models.py --priority
-
-# Download specific model
-python scripts/download-models.py --model animatediff
+mkdir -p outputs/videos
+mkdir -p outputs/audio
+mkdir -p outputs/voice-previews
+mkdir -p outputs/custom-voices
+mkdir -p models/video/animatediff
+mkdir -p models/audio/bark
+mkdir -p models/image/stable-diffusion
+mkdir -p temp
 ```
-
-### Available Models
-- **AnimateDiff** (~2GB) - GIF generation
-- **Stable Diffusion** (~44GB) - Text-to-image
-- **Bark** (~5GB) - Creative TTS
 
 ## 🎯 Usage
 
 ### Video Generation
-1. Navigate to the Video page
+
+1. Navigate to the **Video** tab
 2. Enter your text prompt
-3. Select AI model (AnimateDiff recommended for GIFs)
-4. Choose output format (GIF for AnimateDiff, MP4 for others)
-5. Click "Generate Video"
+3. Adjust settings (optional):
+   - Resolution (256px - 1024px)
+   - Frame count (4-48 frames)
+   - FPS (6-24 FPS)
+   - Quality settings
+4. Click **Generate Video**
 
 ### Audio Generation
-1. Navigate to the Audio page
+
+1. Navigate to the **Audio** tab
 2. Enter your text prompt
-3. Select AI model (Bark recommended)
-4. Choose voice style and format
-5. Click "Generate Audio"
+3. Select a voice from available options
+4. Adjust audio settings if needed
+5. Click **Generate Audio**
 
-### Settings Management
-1. Navigate to Settings page
-2. Download models using the download buttons
-3. Monitor system information
-4. Clear outputs to free space
+### Image Generation
 
-## 🔧 Configuration
+1. Navigate to the **Image** tab
+2. Enter your text prompt
+3. Adjust image settings
+4. Click **Generate Image**
 
-### Backend Configuration
-Edit `backend/main.py` to modify:
-- Model paths
-- Download settings
-- API endpoints
+## ⚙️ Configuration
 
-### Frontend Configuration
-Edit `frontend/src/config.ts` to modify:
-- API URLs
-- Default settings
+### Environment Variables
 
-## 📁 Project Structure
+Create a `.env` file in the root directory:
 
-```
-text-to-media-app/
-├── backend/
-│   ├── models/           # AI model implementations
-│   ├── utils/            # Utility functions
-│   ├── scripts/          # Download and setup scripts
-│   └── main.py          # FastAPI application
-├── frontend/
-│   ├── src/
-│   │   ├── app/         # Next.js pages
-│   │   ├── components/  # React components
-│   │   └── hooks/       # Custom hooks
-│   └── package.json
-├── models/              # Downloaded AI models
-├── outputs/             # Generated media files
-└── README.md
+```env
+# Optional: Override default paths
+OUTPUTS_DIR=/path/to/outputs
+MODELS_DIR=/path/to/models
+TEMP_DIR=/path/to/temp
+
+# Optional: API configuration
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-## 🎨 Model Recommendations
+### Model Management
 
-### For GIF Generation
-- **AnimateDiff** - Best for short, looping animations
-- **Kandinsky** - For artistic, stylized GIFs
+- **Download Models**: Go to Settings → Model Management
+- **Model Storage**: Models are stored in `models/` directory
+- **Supported Models**:
+  - AnimateDiff (Video generation)
+  - Bark (Text-to-speech)
+  - Stable Diffusion (Image generation)
 
-### For High-Quality Videos
-- **AnimateDiff** - Good balance of quality and speed
+#### Download Script Usage
 
-### For Audio Generation
-- **XTTS-v2** - Best quality, multiple speakers
-- **Bark** - Creative voices, non-speech sounds
+The `scripts/download-models.py` script provides comprehensive model management:
 
-## 🔍 Troubleshooting
+```bash
+# Download all models
+python scripts/download-models.py --all
+
+# Download priority models only
+python scripts/download-models.py --priority
+
+# Download specific model
+python scripts/download-models.py --model bark
+
+# List available models
+python scripts/download-models.py --list
+
+# Verify existing downloads
+python scripts/download-models.py --verify
+
+# Force re-download
+python scripts/download-models.py --model bark --force
+```
+
+#### Voice Preview Generation
+
+When downloading Bark models, the script automatically generates voice previews:
+
+- **Automatic Generation**: Voice previews are created after successful Bark model download
+- **10 English Speakers**: Generates previews for v2/en_speaker_0 through v2/en_speaker_9
+- **Smart Caching**: Skips existing previews to avoid regeneration
+- **Output Location**: Preview files are saved to `outputs/voice-previews/`
+- **Format**: Generated as `.wav` files for optimal quality
+
+**Example voice preview generation:**
+```bash
+python scripts/download-models.py --model bark
+# This will:
+# 1. Download Bark models
+# 2. Download preset audio files
+# 3. Generate voice previews automatically
+# 4. Clean up non-English files
+```
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+genai-studio/
+├── backend/                 # FastAPI backend
+│   ├── main.py             # Main application
+│   ├── config.py           # Configuration system
+│   ├── models/             # AI model implementations
+│   └── utils/              # Utility functions
+├── frontend/               # Next.js frontend
+│   ├── src/app/           # Application pages
+│   ├── src/components/    # React components
+│   ├── src/contexts/      # React contexts
+│   └── src/hooks/         # Custom hooks
+├── scripts/               # Utility scripts
+├── models/               # Downloaded AI models
+├── outputs/              # Generated media files
+└── setup.sh             # Setup script
+```
+
+### API Endpoints
+
+- `GET /health` - Health check
+- `POST /generate` - Generate media
+- `GET /models` - List available models
+- `GET /outputs/{type}` - List generated files
+- `DELETE /outputs/{type}/{filename}` - Delete files
+- `GET /download-status` - Model download status
+- `GET /voice-previews` - List available voice previews
+- `POST /generate-voice-previews` - Generate voice preview samples
+- `GET /outputs/voice-previews/{filename}` - Serve voice preview files
+
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-1. **Out of Memory**
-   - Reduce model batch size
-   - Use CPU fallback
-   - Close other applications
+1. **"Module not found" errors:**
+   ```bash
+   cd frontend && npm install
+   cd backend && pip install -r requirements.txt
+   ```
 
-2. **Model Download Fails**
+2. **Port already in use:**
+   - Backend: Change port in `backend/main.py`
+   - Frontend: Change port in `frontend/package.json`
+
+3. **Model download fails:**
    - Check internet connection
    - Ensure sufficient disk space
-   - Try downloading individual models
+   - Try downloading models individually
 
-3. **Generation Fails**
-   - Check model is downloaded
-   - Verify GPU drivers
+4. **Generation fails:**
+   - Check if models are downloaded
+   - Verify GPU/CPU compatibility
    - Check system requirements
 
-### Performance Optimization
+5. **Voice preview generation fails:**
+   - Ensure Bark models are properly downloaded
+   - Check if `soundfile` package is installed: `pip install soundfile`
+   - Verify `outputs/voice-previews/` directory exists
+   - Try regenerating: `python scripts/download-models.py --model bark --force`
 
-1. **GPU Acceleration**
-   - Install CUDA drivers
-   - Use MPS on Apple Silicon
-   - Enable ROCm for AMD GPUs
+### System Requirements
 
-2. **Memory Management**
-   - Use model offloading
-   - Enable attention slicing
-   - Monitor memory usage
+- **Minimum RAM**: 8GB
+- **Recommended RAM**: 16GB+
+- **Storage**: 20GB+ free space
+- **GPU**: Optional but recommended for faster generation
 
-## 🤝 Contributing
+## 📝 License
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+This project is proprietary software. All rights reserved.
 
-## 📄 License
+## 🆘 Support
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+For technical support or questions:
+- Check the troubleshooting section above
+- Review the API documentation
+- Contact the development team
 
-## 🙏 Acknowledgments
+## 🔄 Updates
 
-- Hugging Face for model hosting
-- Stability AI for Stable Diffusion models
-- Coqui for XTTS-v2
-- Suno for Bark
-- The open-source AI community
+To update the application:
 
-## 📞 Support
-
-For support and questions:
-- Create an issue on GitHub
-- Check the troubleshooting section
-- Review the documentation
+```bash
+git pull origin main
+cd frontend && npm install
+cd ../backend && pip install -r requirements.txt
+```
 
 ---
 
-**Note**: This application is designed for local deployment and requires significant computational resources. Ensure your system meets the minimum requirements before installation.
+**GenStudio** - Powered by AI, Built for Creativity 🎨
