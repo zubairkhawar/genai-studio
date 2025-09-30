@@ -18,6 +18,7 @@ import requests
 from typing import Dict, List, Optional
 from huggingface_hub import snapshot_download
 import logging
+import numpy as np
 
 # Add backend to path to import config
 sys.path.append(str(pathlib.Path(__file__).parent.parent / "backend"))
@@ -400,6 +401,82 @@ def cleanup_non_english_embeddings(embeddings_dir: pathlib.Path) -> None:
     except Exception as e:
         logger.warning(f"⚠️  Could not clean up non-English embeddings: {e}")
 
+def generate_voice_previews() -> bool:
+    """Generate voice preview samples for each Bark voice using the downloaded models"""
+    try:
+        logger.info("🎤 Generating voice preview samples using downloaded Bark models...")
+        
+        # Create voice previews directory
+        previews_dir = pathlib.Path('../outputs/voice-previews')
+        previews_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Sample texts for different voice types
+        voice_samples = {
+            "v2/en_speaker_0": "Hello! This is the default English speaker voice. Clear and natural.",
+            "v2/en_speaker_1": "Greetings! I'm an alternative English speaker with a distinct tone.",
+            "v2/en_speaker_2": "Hi there! This voice has a warm and friendly character.",
+            "v2/en_speaker_3": "Good day! This speaker has a professional and authoritative tone.",
+            "v2/en_speaker_4": "Hello! This voice is perfect for storytelling and narration.",
+            "v2/en_speaker_5": "Hey! This speaker has a casual and conversational style.",
+            "v2/en_speaker_6": "Hi! This is a female voice that's clear and engaging.",
+            "v2/en_speaker_7": "Hello! This is a male voice with depth and character.",
+            "v2/en_speaker_8": "Hi! This is a young, energetic voice perfect for children's content.",
+            "v2/en_speaker_9": "Hello! This is a mature voice with wisdom and experience."
+        }
+        
+        # Try to import Bark and generate previews
+        try:
+            import bark
+            from bark import generate_audio, SAMPLE_RATE
+            import soundfile as sf
+            
+            logger.info("✅ Bark imported successfully, generating voice previews...")
+            
+            generated_count = 0
+            for voice_id, sample_text in voice_samples.items():
+                try:
+                    logger.info(f"🎵 Generating preview for {voice_id}...")
+                    
+                    # Check if preview already exists
+                    preview_filename = f"{voice_id.replace('/', '_')}-preview.wav"
+                    preview_path = previews_dir / preview_filename
+                    
+                    if preview_path.exists():
+                        logger.info(f"⏭️  Preview for {voice_id} already exists, skipping...")
+                        generated_count += 1
+                        continue
+                    
+                    # Generate audio with specific voice
+                    audio_array = generate_audio(sample_text, history_prompt=voice_id)
+                    
+                    # Save preview file
+                    if isinstance(audio_array, np.ndarray):
+                        sf.write(str(preview_path), audio_array, SAMPLE_RATE)
+                        logger.info(f"✅ Generated preview: {preview_filename}")
+                        generated_count += 1
+                    else:
+                        logger.warning(f"⚠️  Skipped {voice_id} - invalid audio format")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️  Could not generate preview for {voice_id}: {e}")
+                    continue
+            
+            if generated_count > 0:
+                logger.info(f"🎉 Voice preview generation completed! Generated {generated_count} previews")
+                return True
+            else:
+                logger.warning("⚠️  No voice previews were generated")
+                return False
+            
+        except ImportError as e:
+            logger.warning(f"⚠️  Bark not available for voice preview generation: {e}")
+            logger.info("   Voice previews will be generated when Bark is properly installed")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Error generating voice previews: {e}")
+        return False
+
 def download_bark_models() -> bool:
     """Special handling for Bark models"""
     try:
@@ -425,6 +502,10 @@ def download_bark_models() -> bool:
                 # Download preset audios after successful model setup
                 download_bark_preset_audios()
                 
+                # Generate voice previews using the downloaded models
+                logger.info("🎤 Generating voice previews with downloaded Bark models...")
+                generate_voice_previews()
+                
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("../models/audio/bark")
                 if local_bark_dir.exists():
@@ -443,6 +524,10 @@ def download_bark_models() -> bool:
             if success:
                 # Download preset audios after successful model download
                 download_bark_preset_audios()
+                
+                # Generate voice previews using the downloaded models
+                logger.info("🎤 Generating voice previews with downloaded Bark models...")
+                generate_voice_previews()
                 
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("../models/audio/bark")
@@ -806,7 +891,12 @@ def main():
             logger.info("Available models:", list(MODELS.keys()))
             return
         
-        success = download_model_with_retry(args.model, args.force, max_retries=args.retries)
+        # Use special handling for Bark models
+        if args.model == "bark":
+            success = download_bark_models()
+        else:
+            success = download_model_with_retry(args.model, args.force, max_retries=args.retries)
+            
         if success and verify_model_integrity(args.model):
             logger.info("✅ Model download and verification completed successfully!")
         else:
