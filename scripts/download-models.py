@@ -429,6 +429,7 @@ def generate_voice_previews() -> bool:
             import bark
             from bark import generate_audio, SAMPLE_RATE
             import soundfile as sf
+            from pydub import AudioSegment
             
             logger.info("✅ Bark imported successfully, generating voice previews...")
             
@@ -438,7 +439,7 @@ def generate_voice_previews() -> bool:
                     logger.info(f"🎵 Generating preview for {voice_id}...")
                     
                     # Check if preview already exists
-                    preview_filename = f"{voice_id.replace('/', '_')}-preview.wav"
+                    preview_filename = f"{voice_id.replace('/', '_')}-preview.mp3"
                     preview_path = previews_dir / preview_filename
                     
                     if preview_path.exists():
@@ -449,9 +450,19 @@ def generate_voice_previews() -> bool:
                     # Generate audio with specific voice
                     audio_array = generate_audio(sample_text, history_prompt=voice_id)
                     
-                    # Save preview file
+                    # Save preview file as MP3 for better browser compatibility
                     if isinstance(audio_array, np.ndarray):
-                        sf.write(str(preview_path), audio_array, SAMPLE_RATE)
+                        # First save as temporary WAV
+                        temp_wav_path = previews_dir / f"temp_{voice_id.replace('/', '_')}.wav"
+                        sf.write(str(temp_wav_path), audio_array, SAMPLE_RATE)
+                        
+                        # Convert to MP3 using pydub
+                        audio_segment = AudioSegment.from_wav(str(temp_wav_path))
+                        audio_segment.export(str(preview_path), format="mp3", bitrate="128k")
+                        
+                        # Remove the temporary WAV file
+                        temp_wav_path.unlink()
+                        
                         logger.info(f"✅ Generated preview: {preview_filename}")
                         generated_count += 1
                     else:

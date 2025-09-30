@@ -979,38 +979,42 @@ async def get_voice_previews():
     """Get list of available voice preview files from both generated and preset sources"""
     try:
         preview_files = []
+        voice_preview_map = {}  # To avoid duplicates and prioritize mp3 over wav
         
-        # Check for generated voice previews
-        previews_dir = pathlib.Path('../outputs/voice-previews')
-        if previews_dir.exists():
-            for file_path in previews_dir.iterdir():
-                if file_path.is_file() and file_path.suffix.lower() == '.wav':
-                    # Extract voice ID from filename (e.g., "v2_en_speaker_0-preview.wav" -> "v2/en_speaker_0")
-                    voice_id = file_path.stem.replace('-preview', '').replace('_', '/')
-                    preview_files.append({
-                        "voice_id": voice_id,
-                        "voice_name": voice_id.replace('v2/', '').replace('_', ' ').title(),
-                        "filename": file_path.name,
-                        "size": file_path.stat().st_size,
-                        "url": f"/outputs/voice-previews/{file_path.name}",
-                        "type": "generated"
-                    })
-        
-        # Check for Bark preset audio files
+        # First, check for Bark preset audio files (MP3 - preferred)
         preset_dir = pathlib.Path('../models/audio/bark/preset-audios')
         if preset_dir.exists():
             for file_path in preset_dir.glob("*-preview.mp3"):
                 # Extract voice ID from filename like "v2_en_speaker_0-preview.mp3"
                 voice_id = file_path.stem.replace("-preview", "").replace("_", "/")
-                preview_files.append({
+                voice_preview_map[voice_id] = {
                     "voice_id": voice_id,
                     "voice_name": voice_id.replace('v2/', '').replace('_', ' ').title(),
                     "filename": file_path.name,
                     "size": file_path.stat().st_size,
                     "url": f"/models/audio/bark/preset-audios/{file_path.name}",
                     "type": "preset"
-                })
+                }
         
+        # Then, check for generated voice previews (MP3 files only)
+        previews_dir = pathlib.Path('../outputs/voice-previews')
+        if previews_dir.exists():
+            # Check for MP3 files (generated voice previews)
+            for file_path in previews_dir.glob("*-preview.mp3"):
+                voice_id = file_path.stem.replace('-preview', '').replace('_', '/')
+                # Only add if we don't already have a preset MP3 version
+                if voice_id not in voice_preview_map:
+                    voice_preview_map[voice_id] = {
+                        "voice_id": voice_id,
+                        "voice_name": voice_id.replace('v2/', '').replace('_', ' ').title(),
+                        "filename": file_path.name,
+                        "size": file_path.stat().st_size,
+                        "url": f"/outputs/voice-previews/{file_path.name}",
+                        "type": "generated"
+                    }
+        
+        # Convert map to list and sort
+        preview_files = list(voice_preview_map.values())
         return {"previews": sorted(preview_files, key=lambda x: x["voice_id"])}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1463,6 +1467,7 @@ async def generate_voice_previews():
             import bark
             from bark import generate_audio, SAMPLE_RATE
             import soundfile as sf
+            from pydub import AudioSegment
             import numpy as np
             
             print("✅ Bark imported successfully, generating voice previews...")
@@ -1471,16 +1476,30 @@ async def generate_voice_previews():
                 try:
                     print(f"🎵 Generating preview for {voice_id}...")
                     
+                    # Check if preview already exists
+                    preview_filename = f"{voice_id.replace('/', '_')}-preview.mp3"
+                    preview_path = previews_dir / preview_filename
+                    
+                    if preview_path.exists():
+                        print(f"⏭️  Preview for {voice_id} already exists, skipping...")
+                        continue
+                    
                     # Generate audio with specific voice
                     audio_array = generate_audio(sample_text, history_prompt=voice_id)
                     
-                    # Save preview file
-                    preview_filename = f"{voice_id.replace('/', '_')}-preview.wav"
-                    preview_path = previews_dir / preview_filename
-                    
-                    # Ensure audio is in the right format
+                    # Save preview file as MP3 for better browser compatibility
                     if isinstance(audio_array, np.ndarray):
-                        sf.write(str(preview_path), audio_array, SAMPLE_RATE)
+                        # First save as temporary WAV
+                        temp_wav_path = previews_dir / f"temp_{voice_id.replace('/', '_')}.wav"
+                        sf.write(str(temp_wav_path), audio_array, SAMPLE_RATE)
+                        
+                        # Convert to MP3 using pydub
+                        audio_segment = AudioSegment.from_wav(str(temp_wav_path))
+                        audio_segment.export(str(preview_path), format="mp3", bitrate="128k")
+                        
+                        # Remove the temporary WAV file
+                        temp_wav_path.unlink()
+                        
                         print(f"✅ Generated preview: {preview_filename}")
                     else:
                         print(f"⚠️  Skipped {voice_id} - invalid audio format")
@@ -1561,73 +1580,6 @@ async def serve_custom_voice(filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to serve voice file: {str(e)}")
 
-@app.get("/bark-voices")
-async def get_bark_voices():
-    """Get list of available Bark voices"""
-    voices = [
-        {
-            "id": "v2/en_speaker_0",
-            "name": "Male Speaker 1",
-            "description": "Clear male voice with neutral tone",
-            "type": "male"
-        },
-        {
-            "id": "v2/en_speaker_1", 
-            "name": "Female Speaker 1",
-            "description": "Warm female voice with friendly tone",
-            "type": "female"
-        },
-        {
-            "id": "v2/en_speaker_2",
-            "name": "Male Speaker 2", 
-            "description": "Deep male voice with authoritative tone",
-            "type": "male"
-        },
-        {
-            "id": "v2/en_speaker_3",
-            "name": "Female Speaker 2",
-            "description": "Bright female voice with energetic tone", 
-            "type": "female"
-        },
-        {
-            "id": "v2/en_speaker_4",
-            "name": "Male Speaker 3",
-            "description": "Smooth male voice with calm tone",
-            "type": "male"
-        },
-        {
-            "id": "v2/en_speaker_5",
-            "name": "Female Speaker 3", 
-            "description": "Professional female voice with clear articulation",
-            "type": "female"
-        },
-        {
-            "id": "v2/en_speaker_6",
-            "name": "Male Speaker 4",
-            "description": "Casual male voice with relaxed tone",
-            "type": "male"
-        },
-        {
-            "id": "v2/en_speaker_7",
-            "name": "Female Speaker 4",
-            "description": "Gentle female voice with soothing tone",
-            "type": "female"
-        },
-        {
-            "id": "v2/en_speaker_8",
-            "name": "Male Speaker 5",
-            "description": "Confident male voice with strong presence",
-            "type": "male"
-        },
-        {
-            "id": "v2/en_speaker_9",
-            "name": "Female Speaker 5",
-            "description": "Expressive female voice with dynamic range",
-            "type": "female"
-        }
-    ]
-    
-    return {"voices": voices}
 
 @app.post("/generate-voice-previews")
 async def generate_voice_previews_endpoint():
