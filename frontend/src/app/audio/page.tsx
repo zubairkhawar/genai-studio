@@ -36,18 +36,21 @@ export default function Page() {
 
   const fetchVoicePreviews = async () => {
     try {
-      // Preload preset audio URLs for English speakers directly
-      const englishSpeakers = [
-        'v2/en_speaker_0', 'v2/en_speaker_1', 'v2/en_speaker_2', 'v2/en_speaker_3', 'v2/en_speaker_4',
-        'v2/en_speaker_5', 'v2/en_speaker_6', 'v2/en_speaker_7', 'v2/en_speaker_8', 'v2/en_speaker_9'
-      ];
-      
-      const previewMap: {[key: string]: string} = {};
-      englishSpeakers.forEach(voiceId => {
-        previewMap[voiceId] = getApiUrl(`/outputs/voice-previews/${voiceId.replace('/', '_')}-preview.mp3`);
-      });
-      
-      setVoicePreviews(previewMap);
+      // Fetch voice previews from the API endpoint that returns both generated and preset files
+      const response = await fetch(getApiUrl('/voice-previews'));
+      if (response.ok) {
+        const data = await response.json();
+        const previewMap: {[key: string]: string} = {};
+        
+        // Create a map of voice IDs to their preview URLs
+        data.previews.forEach((preview: any) => {
+          previewMap[preview.voice_id] = getApiUrl(preview.url);
+        });
+        
+        setVoicePreviews(previewMap);
+      } else {
+        console.error('Failed to fetch voice previews:', response.statusText);
+      }
     } catch (error) {
       console.error('Error fetching voice previews:', error);
     }
