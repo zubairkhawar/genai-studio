@@ -136,10 +136,12 @@ class VideoGenerator:
         """Get list of available models"""
         available = []
         for model_id, info in self.available_models.items():
-            # Check if model files exist on disk
+            # Skip stable-diffusion as it's handled by ImageGenerator
             if model_id == "stable-diffusion":
-                model_path = pathlib.Path(f"../models/image/{model_id}")
-            elif model_id == "animatediff":
+                continue
+                
+            # Check if model files exist on disk
+            if model_id == "animatediff":
                 # AnimateDiff has its own motion adapter files
                 model_path = pathlib.Path(f"../models/video/animatediff")
             else:
@@ -190,6 +192,122 @@ class VideoGenerator:
                 
         except Exception as e:
             raise RuntimeError(f"Video generation failed: {e}")
+    
+    async def generate_video_improved(self, prompt: str,
+                           num_frames: int = 16,
+                           width: int = 512,
+                           height: int = 512,
+                           inference_steps: int = 30,
+                           guidance_scale: float = 8.5,
+                           motion_scale: float = 1.5,
+                           fps: int = 8,
+                           progress_callback: Optional[callable] = None) -> str:
+        """Full pipeline: text -> image -> video using SD + AnimateDiff"""
+        try:
+            if progress_callback:
+                progress_callback(10, "Loading models...")
+            
+            # Ensure both SD and AnimateDiff are loaded
+            if "stable-diffusion" not in self.models:
+                await self.load_model("stable-diffusion")
+            if "animatediff" not in self.models:
+                await self.load_model("animatediff")
+            
+            if progress_callback:
+                progress_callback(20, "Generating keyframe image...")
+            
+            # Step 1: Generate keyframe image with SD
+            sd_pipe = self.models.get("stable-diffusion")
+            if not sd_pipe or not sd_pipe.get("generator"):
+                raise RuntimeError("Stable Diffusion not loaded")
+            
+            sd_generator = sd_pipe["generator_instance"]
+            
+            # Generate keyframe in background thread
+            keyframe = await asyncio.to_thread(
+                sd_generator.generate_image,
+                prompt=prompt,
+                width=width,
+                height=height,
+                num_inference_steps=inference_steps,
+                guidance_scale=guidance_scale
+            )
+            
+            if progress_callback:
+                progress_callback(50, "Generating video frames...")
+            
+            # Step 2: AnimateDiff generates motion
+            anim_pipe = self.models.get("animatediff")
+            if not anim_pipe or not anim_pipe.get("generator"):
+                raise RuntimeError("AnimateDiff not loaded")
+            
+            anim_generator = anim_pipe["generator_instance"]
+            
+            # Generate frames in background thread
+            frames = await asyncio.to_thread(
+                anim_generator.generate_video,
+                prompt=prompt,
+                init_image=keyframe,
+                num_frames=num_frames,
+                guidance_scale=guidance_scale,
+                motion_scale=motion_scale
+            )
+            
+            if progress_callback:
+                progress_callback(80, "Saving video...")
+            
+            # Step 3: Save frames as MP4
+            output_dir = pathlib.Path("../outputs/videos")
+            output_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = output_dir / f"video_{timestamp}.mp4"
+            
+            # Save video in background thread
+            await asyncio.to_thread(
+                self._save_frames_to_video,
+                frames, str(output_path), fps
+            )
+            
+            if progress_callback:
+                progress_callback(100, "Video generation complete!")
+            
+            return str(output_path)
+            
+        except Exception as e:
+            raise RuntimeError(f"Video generation failed: {e}")
+    
+    def _save_frames_to_video(self, frames, output_path: str, fps: int = 8):
+        """Save frames as MP4 using OpenCV"""
+        try:
+            import cv2
+            import numpy as np
+            
+            if not frames:
+                raise ValueError("No frames to save")
+            
+            # Get frame dimensions
+            if isinstance(frames[0], Image.Image):
+                # Convert PIL to numpy
+                frame_arrays = [np.array(frame) for frame in frames]
+            else:
+                frame_arrays = frames
+            
+            h, w, _ = frame_arrays[0].shape
+            
+            # Create video writer
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+            
+            for frame in frame_arrays:
+                # Convert RGB to BGR for OpenCV
+                bgr_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                writer.write(bgr_frame)
+            
+            writer.release()
+            print(f"✅ Video saved to: {output_path}")
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to save video: {e}")
 
     async def generate_image(self, prompt: str, model_name: str,
                              progress_callback: Optional[callable] = None) -> str:

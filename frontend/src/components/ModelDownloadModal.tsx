@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
-import { X, AlertTriangle, HardDrive, Clock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { X, AlertTriangle, HardDrive, Clock, CloudDownload } from 'lucide-react';
+import { getApiUrl } from '@/config';
 
 interface Model {
   id: string;
@@ -22,8 +23,6 @@ interface ModelDownloadModalProps {
   onModelsDownloaded?: () => void;
 }
 
-// Downloads are disabled in this build. The modal is informational only.
-
 export default function ModelDownloadModal({
   isOpen,
   onClose,
@@ -31,6 +30,12 @@ export default function ModelDownloadModal({
   modelType,
   onModelsDownloaded
 }: ModelDownloadModalProps) {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [progress, setProgress] = useState<number | null>(null);
+  const [currentModel, setCurrentModel] = useState<string | null>(null);
+  const [controller, setController] = useState<AbortController | null>(null);
+
   // Memoized totals for display only
   const totalEstimatedGb = useMemo(() => {
     return missingModels.reduce((sum, m) => sum + (m.size_gb ?? getEstimatedSize(m.id)), 0);
@@ -62,7 +67,144 @@ export default function ModelDownloadModal({
     }
   };
 
-  // Download functions intentionally removed (downloads disabled)
+  const normalizeModelId = (modelId: string) => {
+    if (modelId === 'stable-diffusion') return 'stable_diffusion';
+    return modelId;
+  };
+
+  // Start streaming download for all required models
+  const startDownloadAll = async (force = false) => {
+    try {
+      setIsDownloading(true);
+      setMessage('Starting download of all required models...');
+      setProgress(null);
+      setCurrentModel('all');
+
+      // Abort any previous stream
+      controller?.abort();
+      const aborter = new AbortController();
+      setController(aborter);
+
+      const url = getApiUrl(`/download-models-stream?force=${force}`);
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        },
+        signal: aborter.signal
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'progress') {
+                setProgress(typeof data.progress === 'number' ? data.progress : (typeof data.overall_progress === 'number' ? data.overall_progress : null));
+                setMessage(data.message || 'Downloading...');
+              } else if (data.type === 'log') {
+                setMessage(data.message || 'Downloading...');
+              } else if (data.type === 'success') {
+                setMessage('Download completed successfully');
+                setIsDownloading(false);
+                setProgress(100);
+                setCurrentModel(null);
+                onModelsDownloaded && onModelsDownloaded();
+                return;
+              } else if (data.type === 'error') {
+                setMessage(data.message || 'Download failed');
+                setIsDownloading(false);
+                setCurrentModel(null);
+                return;
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Failed to start download');
+      setIsDownloading(false);
+      setCurrentModel(null);
+    }
+  };
+
+  // Start streaming download for a specific model
+  const downloadModel = async (modelId: string, force = false) => {
+    const normalized = normalizeModelId(modelId);
+    try {
+      setIsDownloading(true);
+      setMessage(`Starting download: ${normalized}...`);
+      setProgress(0);
+      setCurrentModel(normalized);
+
+      // Abort any previous stream
+      controller?.abort();
+      const aborter = new AbortController();
+      setController(aborter);
+
+      const url = getApiUrl(`/download-model-stream/${normalized}?force=${force}`);
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        },
+        signal: aborter.signal
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'progress') {
+                const pct = typeof data.progress === 'number' ? data.progress : (typeof data.overall_progress === 'number' ? data.overall_progress : null);
+                if (pct !== null) setProgress(pct);
+                setMessage(data.message || 'Downloading...');
+              } else if (data.type === 'log') {
+                setMessage(data.message || 'Downloading...');
+              } else if (data.type === 'success') {
+                setMessage('Model downloaded successfully');
+                setIsDownloading(false);
+                setProgress(100);
+                setCurrentModel(null);
+                onModelsDownloaded && onModelsDownloaded();
+                return;
+              } else if (data.type === 'error') {
+                setMessage(data.message || 'Download failed');
+                setIsDownloading(false);
+                setCurrentModel(null);
+                return;
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Failed to start model download');
+      setIsDownloading(false);
+      setCurrentModel(null);
+    }
+  };
 
   const getTotalSize = () => {
     return missingModels.reduce((total, model) => {
@@ -103,7 +245,7 @@ export default function ModelDownloadModal({
             </div>
             <button
               onClick={onClose}
-              disabled={downloadStatus.is_downloading}
+              disabled={isDownloading}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50"
             >
               <X className="h-5 w-5" />
@@ -128,7 +270,7 @@ export default function ModelDownloadModal({
             </div>
           </div>
 
-          {/* Missing Models List (informational only) */}
+          {/* Missing Models List */}
           <div className="space-y-3">
             {missingModels.map((model) => (
               <div key={model.id} className="p-4 border border-gray-200 dark:border-slate-600 rounded-xl bg-gray-50 dark:bg-slate-700/50">
@@ -149,24 +291,48 @@ export default function ModelDownloadModal({
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-300">
-                    <span>Downloads are disabled in this build.</span>
+                    <button
+                      onClick={() => downloadModel(model.id)}
+                      disabled={isDownloading}
+                      className="px-3 py-1 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border border-blue-500/30 disabled:opacity-50"
+                      title={`Download ${model.name}`}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <CloudDownload className="h-3 w-3" />
+                        <span>Download</span>
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Info note */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="h-5 w-5 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-800 dark:text-blue-200">
-                Model downloads are disabled in this build. Please place models manually in the configured models directory and click Close.
+          {isDownloading && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="text-sm text-blue-800 dark:text-blue-200 truncate">
+                    {message || 'Downloading...'}
+                  </div>
+                  <div className="mt-2 w-full bg-blue-200/40 dark:bg-blue-200/20 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${progress ?? 10}%` }}
+                    />
+                  </div>
+                  {currentModel && (
+                    <div className="mt-1 text-xs text-blue-900/80 dark:text-blue-200/80">
+                      {currentModel === 'all' ? 'All models' : `Model: ${currentModel}`} {typeof progress === 'number' ? `• ${progress}%` : ''}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -178,12 +344,35 @@ export default function ModelDownloadModal({
                 <span>Estimated time: {missingModels.length * 2}-{missingModels.length * 5} minutes</span>
               </div>
             </div>
-            <button
-              onClick={downloadStatus.is_downloading ? cancelDownload : onClose}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-            >
-              {downloadStatus.is_downloading ? 'Cancel Download' : 'Close'}
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => startDownloadAll(false)}
+                disabled={isDownloading}
+                className="px-4 py-2 rounded-lg bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30 transition-colors disabled:opacity-50"
+                title="Download all required models"
+              >
+                <div className="flex items-center space-x-2">
+                  <CloudDownload className="h-4 w-4" />
+                  <span>Download All Required</span>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  if (isDownloading) {
+                    controller?.abort();
+                    setIsDownloading(false);
+                    setProgress(null);
+                    setCurrentModel(null);
+                    setMessage('Download cancelled');
+                  } else {
+                    onClose();
+                  }
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              >
+                {isDownloading ? 'Cancel' : 'Close'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

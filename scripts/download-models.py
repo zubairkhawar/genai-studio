@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Comprehensive Model Download Script
-
 This script downloads all the recommended models for the text-to-media application:
 - AnimateDiff (for GIF generation)
 - Stable Diffusion (for text-to-image generation)
@@ -70,24 +69,26 @@ MODELS = {
 def check_existing_models() -> Dict[str, bool]:
     """Check which models are already downloaded"""
     existing = {}
-    
     for model_id, config in MODELS.items():
         local_dir = pathlib.Path(config["local_dir"])
-        
         if local_dir.exists():
             # Check for actual model weight files
-            weight_files = list(local_dir.rglob("*.safetensors")) + list(local_dir.rglob("*.bin")) + list(local_dir.rglob("*.pt")) + list(local_dir.rglob("*.pth"))
-            
+            weight_files = (
+                list(local_dir.rglob("*.safetensors")) +
+                list(local_dir.rglob("*.bin")) +
+                list(local_dir.rglob("*.pt")) +
+                list(local_dir.rglob("*.pth")) +
+                list(local_dir.rglob("*.ckpt"))
+            )
             if len(weight_files) > 0:
                 existing[model_id] = True
                 logger.info(f"✅ {config['name']} already downloaded")
             else:
                 existing[model_id] = False
-                logger.warning(f"⚠️  {config['name']} directory exists but no model files found")
+                logger.warning(f"⚠️ {config['name']} directory exists but no model files found")
         else:
             existing[model_id] = False
             logger.info(f"❌ {config['name']} not found")
-    
     return existing
 
 def check_network_connectivity() -> bool:
@@ -110,18 +111,19 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
     # Skip if already downloaded (weights exist) unless force
     if not force and local_dir.exists():
         weight_files = (
-            list(local_dir.rglob("*.safetensors"))
-            + list(local_dir.rglob("*.bin"))
-            + list(local_dir.rglob("*.pt"))
-            + list(local_dir.rglob("*.pth"))
+            list(local_dir.rglob("*.safetensors")) +
+            list(local_dir.rglob("*.bin")) +
+            list(local_dir.rglob("*.pt")) +
+            list(local_dir.rglob("*.pth")) +
+            list(local_dir.rglob("*.ckpt"))
         )
         if len(weight_files) > 0:
-            logger.info(f"⏭️  Skipping {config['name']} - already downloaded")
+            logger.info(f"⏭️ Skipping {config['name']} - already downloaded")
             return True
 
     # Check network connectivity first
     if not check_network_connectivity():
-        logger.warning("⚠️  Network connectivity issues detected. Will retry with longer timeouts...")
+        logger.warning("⚠️ Network connectivity issues detected. Will retry with longer timeouts...")
 
     for attempt in range(max_retries):
         try:
@@ -131,10 +133,10 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
                 time.sleep(wait_time)
 
             logger.info(f"📥 Downloading {config['name']}...")
-            logger.info(f"   Repository: {config['repo_id']}")
-            logger.info(f"   Local path: {local_dir}")
-            logger.info(f"   Size: ~{config['size_gb']}GB")
-            logger.info(f"   Attempt: {attempt + 1}/{max_retries}")
+            logger.info(f" Repository: {config['repo_id']}")
+            logger.info(f" Local path: {local_dir}")
+            logger.info(f" Size: ~{config['size_gb']}GB")
+            logger.info(f" Attempt: {attempt + 1}/{max_retries}")
 
             # Ensure directory
             local_dir.mkdir(parents=True, exist_ok=True)
@@ -152,34 +154,32 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
 
             # Verify: require at least one weight file
             weight_files = (
-                list(local_dir.rglob("*.safetensors"))
-                + list(local_dir.rglob("*.bin"))
-                + list(local_dir.rglob("*.pt"))
-                + list(local_dir.rglob("*.pth"))
+                list(local_dir.rglob("*.safetensors")) +
+                list(local_dir.rglob("*.bin")) +
+                list(local_dir.rglob("*.pt")) +
+                list(local_dir.rglob("*.pth")) +
+                list(local_dir.rglob("*.ckpt"))
             )
-            
             # Also check for config files to ensure complete download
             config_files = list(local_dir.rglob("*.json")) + list(local_dir.rglob("*.txt")) + list(local_dir.rglob("*.yaml"))
-            
+
             if len(weight_files) == 0:
-                raise Exception("No weight files (*.safetensors|*.bin|*.pt|*.pth) found after download")
-            
+                raise Exception("No weight files (*.safetensors|*.bin|*.pt|*.pth|*.ckpt) found after download")
+
             if len(config_files) == 0:
-                logger.warning("⚠️  No config files found - model may be incomplete")
+                logger.warning("⚠️ No config files found - model may be incomplete")
 
             total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
             size_gb = total_size / (1024 * 1024 * 1024)
             logger.info(f"✅ Successfully downloaded {config['name']} ({size_gb:.2f} GB of weights)")
-            
+
             # Log all downloaded files for verification
             all_files = list(local_dir.rglob("*"))
             logger.info(f"📁 Downloaded {len(all_files)} files total")
-            
             return True
 
         except Exception as e:
             logger.error(f"❌ Attempt {attempt + 1} failed for {config['name']}: {e}")
-            
             if attempt == max_retries - 1:
                 logger.error(f"💥 All {max_retries} attempts failed for {config['name']}")
                 return False
@@ -191,7 +191,7 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
 def download_model(model_id: str, force: bool = False) -> bool:
     """Download a specific model (wrapper for backward compatibility)"""
     return download_model_with_retry(model_id, force, max_retries=3)
-    
+
 def download_bark_preset_audios() -> bool:
     """Download Bark preset audio files for voice previews - ENGLISH ONLY"""
     try:
@@ -200,7 +200,7 @@ def download_bark_preset_audios() -> bool:
         # Create preset audio directory
         preset_dir = pathlib.Path("../models/audio/bark/preset-audios")
         preset_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # ENGLISH ONLY voice presets with their audio URLs
         preset_audios = [
             {
@@ -210,7 +210,7 @@ def download_bark_preset_audios() -> bool:
                 "continuation_url": "https://dl.suno-models.io/bark/prompts/continuation_audio/en_speaker_0.mp3"
             },
             {
-                "id": "v2/en_speaker_1", 
+                "id": "v2/en_speaker_1",
                 "name": "Speaker 1 (EN)",
                 "prompt_url": "https://dl.suno-models.io/bark/prompts/prompt_audio/en_speaker_1.mp3",
                 "continuation_url": "https://dl.suno-models.io/bark/prompts/continuation_audio/en_speaker_1.mp3"
@@ -264,7 +264,7 @@ def download_bark_preset_audios() -> bool:
                 "continuation_url": "https://dl.suno-models.io/bark/prompts/continuation_audio/en_speaker_9.mp3"
             }
         ]
-        
+
         downloaded_count = 0
         for preset in preset_audios:
             try:
@@ -278,8 +278,8 @@ def download_bark_preset_audios() -> bool:
                         f.write(response.content)
                     logger.info(f"✅ Downloaded {preset['name']} prompt audio")
                 else:
-                    logger.info(f"⏭️  {preset['name']} prompt audio already exists")
-                
+                    logger.info(f"⏭️ {preset['name']} prompt audio already exists")
+
                 # Download continuation audio (optional)
                 continuation_file = preset_dir / f"{preset['id'].replace('/', '_')}-continuation.mp3"
                 if not continuation_file.exists():
@@ -290,25 +290,22 @@ def download_bark_preset_audios() -> bool:
                         f.write(response.content)
                     logger.info(f"✅ Downloaded {preset['name']} continuation audio")
                 else:
-                    logger.info(f"⏭️  {preset['name']} continuation audio already exists")
-                
+                    logger.info(f"⏭️ {preset['name']} continuation audio already exists")
+
                 downloaded_count += 1
-                
             except Exception as e:
                 logger.error(f"❌ Failed to download {preset['name']}: {e}")
                 continue
-        
+
         if downloaded_count > 0:
             logger.info(f"✅ Downloaded {downloaded_count} Bark preset audio sets (English only)")
-            
             # Clean up any non-English preset files to save space
             cleanup_non_english_presets(preset_dir)
-            
             return True
         else:
-            logger.warning("⚠️  No Bark preset audios were downloaded")
+            logger.warning("⚠️ No Bark preset audios were downloaded")
             return False
-            
+
     except Exception as e:
         logger.error(f"❌ Bark preset audio download failed: {e}")
         return False
@@ -335,7 +332,7 @@ def cleanup_non_english_presets(preset_dir: pathlib.Path) -> None:
             "speaker_",     # Generic speakers (non-v2)
             "announcer"     # Announcer voice
         ]
-        
+
         removed_count = 0
         for prefix in non_english_prefixes:
             # Remove .npz files
@@ -345,7 +342,7 @@ def cleanup_non_english_presets(preset_dir: pathlib.Path) -> None:
                     removed_count += 1
                 except Exception as e:
                     logger.warning(f"Could not remove {file_path}: {e}")
-            
+
             # Remove .mp3 files
             for file_path in preset_dir.glob(f"{prefix}*.mp3"):
                 try:
@@ -353,14 +350,14 @@ def cleanup_non_english_presets(preset_dir: pathlib.Path) -> None:
                     removed_count += 1
                 except Exception as e:
                     logger.warning(f"Could not remove {file_path}: {e}")
-        
+
         if removed_count > 0:
             logger.info(f"✅ Removed {removed_count} non-English preset files")
         else:
-            logger.info("ℹ️  No non-English preset files found to remove")
-            
+            logger.info("ℹ️ No non-English preset files found to remove")
+
     except Exception as e:
-        logger.warning(f"⚠️  Could not clean up non-English presets: {e}")
+        logger.warning(f"⚠️ Could not clean up non-English presets: {e}")
 
 def cleanup_non_english_embeddings(embeddings_dir: pathlib.Path) -> None:
     """Remove non-English speaker embedding files to save space"""
@@ -383,7 +380,7 @@ def cleanup_non_english_embeddings(embeddings_dir: pathlib.Path) -> None:
             "zh_speaker_",  # Chinese
             "announcer"     # Announcer voice
         ]
-        
+
         removed_count = 0
         for prefix in non_english_prefixes:
             for file_path in embeddings_dir.glob(f"{prefix}*.npy"):
@@ -392,14 +389,14 @@ def cleanup_non_english_embeddings(embeddings_dir: pathlib.Path) -> None:
                     removed_count += 1
                 except Exception as e:
                     logger.warning(f"Could not remove {file_path}: {e}")
-        
+
         if removed_count > 0:
             logger.info(f"✅ Removed {removed_count} non-English embedding files")
         else:
-            logger.info("ℹ️  No non-English embedding files found to remove")
-            
+            logger.info("ℹ️ No non-English embedding files found to remove")
+
     except Exception as e:
-        logger.warning(f"⚠️  Could not clean up non-English embeddings: {e}")
+        logger.warning(f"⚠️ Could not clean up non-English embeddings: {e}")
 
 def generate_voice_previews() -> bool:
     """Generate voice preview samples for each Bark voice using the downloaded models"""
@@ -409,7 +406,7 @@ def generate_voice_previews() -> bool:
         # Create voice previews directory
         previews_dir = pathlib.Path('../outputs/voice-previews')
         previews_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Sample texts for different voice types
         voice_samples = {
             "v2/en_speaker_0": "Hello! This is the default English speaker voice. Clear and natural.",
@@ -421,16 +418,16 @@ def generate_voice_previews() -> bool:
             "v2/en_speaker_6": "Hi! This is a female voice that's clear and engaging.",
             "v2/en_speaker_7": "Hello! This is a male voice with depth and character.",
             "v2/en_speaker_8": "Hi! This is a young, energetic voice perfect for children's content.",
-            "v2/en_speaker_9": "Hello! This is a mature voice with wisdom and experience."
+            "v2/en_speaker_9": "Hello! This is a mature female voice with wisdom and experience."
         }
-        
+
         # Try to import Bark and generate previews
         try:
             import bark
             from bark import generate_audio, SAMPLE_RATE
             import soundfile as sf
             from pydub import AudioSegment
-            
+
             logger.info("✅ Bark imported successfully, generating voice previews...")
             
             generated_count = 0
@@ -443,47 +440,47 @@ def generate_voice_previews() -> bool:
                     preview_path = previews_dir / preview_filename
                     
                     if preview_path.exists():
-                        logger.info(f"⏭️  Preview for {voice_id} already exists, skipping...")
+                        logger.info(f"⏭️ Preview for {voice_id} already exists, skipping...")
                         generated_count += 1
                         continue
-                    
+
                     # Generate audio with specific voice
                     audio_array = generate_audio(sample_text, history_prompt=voice_id)
-                    
+
                     # Save preview file as MP3 for better browser compatibility
                     if isinstance(audio_array, np.ndarray):
                         # First save as temporary WAV
                         temp_wav_path = previews_dir / f"temp_{voice_id.replace('/', '_')}.wav"
                         sf.write(str(temp_wav_path), audio_array, SAMPLE_RATE)
-                        
+
                         # Convert to MP3 using pydub
                         audio_segment = AudioSegment.from_wav(str(temp_wav_path))
                         audio_segment.export(str(preview_path), format="mp3", bitrate="128k")
-                        
+
                         # Remove the temporary WAV file
                         temp_wav_path.unlink()
-                        
+
                         logger.info(f"✅ Generated preview: {preview_filename}")
                         generated_count += 1
                     else:
-                        logger.warning(f"⚠️  Skipped {voice_id} - invalid audio format")
-                        
+                        logger.warning(f"⚠️ Skipped {voice_id} - invalid audio format")
+
                 except Exception as e:
-                    logger.warning(f"⚠️  Could not generate preview for {voice_id}: {e}")
+                    logger.warning(f"⚠️ Could not generate preview for {voice_id}: {e}")
                     continue
-            
+
             if generated_count > 0:
                 logger.info(f"🎉 Voice preview generation completed! Generated {generated_count} previews")
                 return True
             else:
-                logger.warning("⚠️  No voice previews were generated")
+                logger.warning("⚠️ No voice previews were generated")
                 return False
-            
+
         except ImportError as e:
-            logger.warning(f"⚠️  Bark not available for voice preview generation: {e}")
-            logger.info("   Voice previews will be generated when Bark is properly installed")
+            logger.warning(f"⚠️ Bark not available for voice preview generation: {e}")
+            logger.info(" Voice previews will be generated when Bark is properly installed")
             return False
-            
+
     except Exception as e:
         logger.error(f"❌ Error generating voice previews: {e}")
         return False
@@ -497,37 +494,43 @@ def download_bark_models() -> bool:
         try:
             import bark
             from bark import preload_models
+            import torch
             
+            # Fix PyTorch 2.6 weights_only issue for Bark
+            try:
+                torch.serialization.add_safe_globals(['numpy.core.multiarray.scalar'])
+            except Exception:
+                pass
+
             # Preload models (this downloads them to cache)
             preload_models()
-            
+
             # Check if Bark cache exists
             bark_cache = pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
             if bark_cache.exists():
                 # Calculate cache size
                 total_size = sum(f.stat().st_size for f in bark_cache.rglob("*") if f.is_file())
                 size_mb = total_size / (1024 * 1024)
-                
                 logger.info(f"✅ Bark models ready ({size_mb:.1f} MB)")
-                
+
                 # Download preset audios after successful model setup
                 download_bark_preset_audios()
                 
                 # Generate voice previews using the downloaded models
                 logger.info("🎤 Generating voice previews with downloaded Bark models...")
                 generate_voice_previews()
-                
+
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("../models/audio/bark")
                 if local_bark_dir.exists():
                     embeddings_dir = local_bark_dir / "speaker_embeddings"
                     if embeddings_dir.exists():
                         cleanup_non_english_embeddings(embeddings_dir)
-                
+
                 return True
             else:
                 raise Exception("Bark cache not found after preload")
-                
+
         except ImportError:
             # Fallback: download Bark repository (will include configs)
             logger.info("📦 Bark package not found, downloading repository...")
@@ -539,19 +542,20 @@ def download_bark_models() -> bool:
                 # Generate voice previews using the downloaded models
                 logger.info("🎤 Generating voice previews with downloaded Bark models...")
                 generate_voice_previews()
-                
+
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("../models/audio/bark")
                 if local_bark_dir.exists():
                     embeddings_dir = local_bark_dir / "speaker_embeddings"
                     if embeddings_dir.exists():
                         cleanup_non_english_embeddings(embeddings_dir)
-            return success
-            
+
+                return success
+
     except Exception as e:
         logger.error(f"❌ Bark setup failed: {e}")
         return False
-    
+
 def download_animatediff_models() -> bool:
     """Special handling for AnimateDiff models following official repository structure"""
     try:
@@ -563,18 +567,18 @@ def download_animatediff_models() -> bool:
         if not repo_success:
             logger.error("❌ Failed to download AnimateDiff repository")
             return False
-        
+
         # Download the motion adapter separately
         logger.info("📥 Downloading AnimateDiff motion adapter...")
         adapter_success = download_model("animatediff_motion_adapter")
         if not adapter_success:
             logger.error("❌ Failed to download AnimateDiff motion adapter")
             return False
-        
+
         # Verify the setup
         animatediff_dir = pathlib.Path("../models/video/animatediff")
         motion_adapter_dir = pathlib.Path("../models/video/animatediff/motion_adapter")
-        
+
         # Check for essential files in the main repository
         essential_files = [
             "config.json",
@@ -585,61 +589,59 @@ def download_animatediff_models() -> bool:
         for file_path in essential_files:
             if not (animatediff_dir / file_path).exists():
                 missing_files.append(file_path)
-        
+
         if missing_files:
-            logger.warning(f"⚠️  Missing essential files: {missing_files}")
+            logger.warning(f"⚠️ Missing essential files: {missing_files}")
             return False
-        
+
         # Check motion adapter files
         adapter_files = list(motion_adapter_dir.rglob("*.safetensors")) + list(motion_adapter_dir.rglob("*.bin"))
         if len(adapter_files) == 0:
             logger.error("❌ No motion adapter weight files found")
             return False
-        
+
         # Check for motion adapter config
         adapter_config = motion_adapter_dir / "config.json"
         if not adapter_config.exists():
-            logger.warning("⚠️  Motion adapter config.json not found")
-        
+            logger.warning("⚠️ Motion adapter config.json not found")
+
         logger.info("✅ AnimateDiff setup completed successfully")
         logger.info(f"📁 Repository: {animatediff_dir}")
         logger.info(f"📁 Motion adapter: {motion_adapter_dir}")
         logger.info(f"📁 Motion adapter files: {len(adapter_files)} weight files found")
-        
         return True
-        
+
     except Exception as e:
         logger.error(f"❌ AnimateDiff setup failed: {e}")
         return False
 
-        
 def verify_model_integrity(model_id: str) -> bool:
     """Verify that a model download is complete and not corrupted with comprehensive file checking"""
     if model_id not in MODELS:
         return False
-    
+
     config = MODELS[model_id]
     local_dir = pathlib.Path(config["local_dir"])
-    
+
     if not local_dir.exists():
         return False
-    
+
     # Check for essential files
     weight_files = (
-        list(local_dir.rglob("*.safetensors"))
-        + list(local_dir.rglob("*.bin"))
-        + list(local_dir.rglob("*.pt"))
-        + list(local_dir.rglob("*.pth"))
-        + list(local_dir.rglob("*.ckpt"))
+        list(local_dir.rglob("*.safetensors")) +
+        list(local_dir.rglob("*.bin")) +
+        list(local_dir.rglob("*.pt")) +
+        list(local_dir.rglob("*.pth")) +
+        list(local_dir.rglob("*.ckpt"))
     )
     
     config_files = (
-        list(local_dir.rglob("*.json"))
-        + list(local_dir.rglob("*.txt"))
-        + list(local_dir.rglob("*.yaml"))
-        + list(local_dir.rglob("*.yml"))
+        list(local_dir.rglob("*.json")) +
+        list(local_dir.rglob("*.txt")) +
+        list(local_dir.rglob("*.yaml")) +
+        list(local_dir.rglob("*.yml"))
     )
-    
+
     # Model-specific verification
     if model_id == "stable_diffusion":
         # Check for specific Stable Diffusion files
@@ -659,16 +661,16 @@ def verify_model_integrity(model_id: str) -> bool:
         for req_file in required_files:
             if not (local_dir / req_file).exists():
                 missing_files.append(req_file)
-        
+
         missing_dirs = []
         for req_dir in required_dirs:
             if not (local_dir / req_dir).exists():
                 missing_dirs.append(req_dir)
-        
+
         if missing_files or missing_dirs:
-            logger.warning(f"⚠️  {config['name']}: Missing required files/dirs: {missing_files + missing_dirs}")
+            logger.warning(f"⚠️ {config['name']}: Missing required files/dirs: {missing_files + missing_dirs}")
             return False
-    
+
     elif model_id == "animatediff":
         # Check for AnimateDiff specific files
         required_files = [
@@ -680,33 +682,33 @@ def verify_model_integrity(model_id: str) -> bool:
         for req_file in required_files:
             if not (local_dir / req_file).exists():
                 missing_files.append(req_file)
-        
+
         # Check for motion adapter directory and files
         motion_adapter_dir = local_dir / "motion_adapter"
         if not motion_adapter_dir.exists():
-            logger.warning(f"⚠️  {config['name']}: Missing motion_adapter directory")
+            logger.warning(f"⚠️ {config['name']}: Missing motion_adapter directory")
             return False
-        
+
         # Check for motion adapter weight files
         adapter_files = list(motion_adapter_dir.rglob("*.safetensors")) + list(motion_adapter_dir.rglob("*.bin"))
         if len(adapter_files) == 0:
-            logger.warning(f"⚠️  {config['name']}: No motion adapter weight files found")
+            logger.warning(f"⚠️ {config['name']}: No motion adapter weight files found")
             return False
-        
+
         # Check for motion adapter config
         adapter_config = motion_adapter_dir / "config.json"
         if not adapter_config.exists():
-            logger.warning(f"⚠️  {config['name']}: Motion adapter config.json not found")
-        
+            logger.warning(f"⚠️ {config['name']}: Motion adapter config.json not found")
+
         if missing_files:
-            logger.warning(f"⚠️  {config['name']}: Missing required files: {missing_files}")
+            logger.warning(f"⚠️ {config['name']}: Missing required files: {missing_files}")
             return False
-    
+
     elif model_id == "bark":
         # Check for Bark specific files
         required_files = [
             "config.json",
-            "generation_config.json",
+            "generation_config.json", 
             "tokenizer.json",
             "tokenizer_config.json",
             "vocab.txt",
@@ -720,71 +722,70 @@ def verify_model_integrity(model_id: str) -> bool:
             core_models.append("coarse_2.pt")
         if (local_dir / "fine_2.pt").exists():
             core_models.append("fine_2.pt")
-        
+
         missing_files = []
         for req_file in required_files + core_models:
             if not (local_dir / req_file).exists():
                 missing_files.append(req_file)
-        
+
         # Check for English speaker embeddings (only English, not all languages)
         speaker_embeddings_dir = local_dir / "speaker_embeddings"
         if speaker_embeddings_dir.exists():
             english_embeddings = list(speaker_embeddings_dir.glob("en_speaker_*_*.npy"))
             if len(english_embeddings) < 20:  # Should have at least 10 speakers × 2 embedding types
-                logger.warning(f"⚠️  {config['name']}: Missing English speaker embeddings (found {len(english_embeddings)})")
+                logger.warning(f"⚠️ {config['name']}: Missing English speaker embeddings (found {len(english_embeddings)})")
                 return False
         else:
-            logger.warning(f"⚠️  {config['name']}: Missing speaker_embeddings directory")
+            logger.warning(f"⚠️ {config['name']}: Missing speaker_embeddings directory")
             return False
-        
+
         # Check for English preset audios only
         preset_audios_dir = local_dir / "preset-audios"
         if preset_audios_dir.exists():
             english_presets = list(preset_audios_dir.glob("en_speaker_*.npz"))
             if len(english_presets) < 10:  # Should have 10 English speakers
-                logger.warning(f"⚠️  {config['name']}: Missing English preset audios (found {len(english_presets)})")
+                logger.warning(f"⚠️ {config['name']}: Missing English preset audios (found {len(english_presets)})")
                 return False
         else:
-            logger.warning(f"⚠️  {config['name']}: Missing preset-audios directory")
+            logger.warning(f"⚠️ {config['name']}: Missing preset-audios directory")
             return False
-        
+
         if missing_files:
-            logger.warning(f"⚠️  {config['name']}: Missing required files: {missing_files}")
+            logger.warning(f"⚠️ {config['name']}: Missing required files: {missing_files}")
             return False
-    
+
     # Must have at least one weight file
     if len(weight_files) == 0:
-        logger.warning(f"⚠️  {config['name']}: No weight files found")
+        logger.warning(f"⚠️ {config['name']}: No weight files found")
         return False
-    
+
     # Check for file corruption (basic size check)
     corrupted_files = []
     for weight_file in weight_files:
         if weight_file.stat().st_size == 0:
             corrupted_files.append(weight_file.name)
-    
+
     if corrupted_files:
-        logger.warning(f"⚠️  {config['name']}: Corrupted files detected: {corrupted_files}")
+        logger.warning(f"⚠️ {config['name']}: Corrupted files detected: {corrupted_files}")
         return False
-    
+
     # Log verification results
     total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
     size_gb = total_size / (1024 * 1024 * 1024)
-    
     logger.info(f"✅ {config['name']}: Verified ({len(weight_files)} weight files, {len(config_files)} config files, {size_gb:.2f}GB)")
     return True
 
 def download_all_models(force: bool = False, priority_only: bool = False) -> bool:
     """Download all models in priority order with comprehensive verification"""
     logger.info("🚀 Starting comprehensive model download...")
-    
+
     # Check network connectivity
     if not check_network_connectivity():
-        logger.warning("⚠️  Network connectivity issues detected. Downloads may fail or be slow.")
-    
+        logger.warning("⚠️ Network connectivity issues detected. Downloads may fail or be slow.")
+
     # Check existing models
     existing = check_existing_models()
-    
+
     # Sort models by priority
     sorted_models = sorted(MODELS.items(), key=lambda x: x[1]["priority"])
     
@@ -792,22 +793,22 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
         # Only download high-priority models (1-3)
         sorted_models = [m for m in sorted_models if m[1]["priority"] <= 3]
         logger.info("📋 Downloading priority models only (AnimateDiff, Kandinsky, XTTS-v2, SD)")
-    
+
     total_models = len(sorted_models)
     completed = 0
     failed = []
-    
+
     for model_id, config in sorted_models:
         try:
             logger.info(f"📊 Progress: {completed}/{total_models} models completed")
-            
+
             # Skip if already downloaded and verified (unless force)
             if not force and existing.get(model_id, False):
                 if verify_model_integrity(model_id):
-                    logger.info(f"⏭️  Skipping {config['name']} - already downloaded and verified")
+                    logger.info(f"⏭️ Skipping {config['name']} - already downloaded and verified")
                     completed += 1
                     continue
-            
+
             # Download the model
             if model_id == "bark":
                 success = download_bark_models()
@@ -818,7 +819,7 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
                 success = True
             else:
                 success = download_model_with_retry(model_id, force, max_retries=5)  # More retries for critical models
-            
+
             if success:
                 # Verify the download
                 if verify_model_integrity(model_id):
@@ -829,30 +830,30 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
                     failed.append(model_id)
             else:
                 failed.append(model_id)
-                
+
         except Exception as e:
             logger.error(f"❌ Error downloading {config['name']}: {e}")
             failed.append(model_id)
-    
+
     # Final verification of all models
     logger.info("🔍 Performing final verification of all models...")
     verification_failed = []
     for model_id, config in sorted_models:
         if not verify_model_integrity(model_id):
             verification_failed.append(model_id)
-    
+
     # Summary
     logger.info(f"🎉 Download completed: {completed}/{total_models} models successful")
     
     if failed:
-        logger.warning(f"⚠️  Failed downloads: {', '.join(failed)}")
+        logger.warning(f"⚠️ Failed downloads: {', '.join(failed)}")
     
     if verification_failed:
-        logger.warning(f"⚠️  Verification failed: {', '.join(verification_failed)}")
+        logger.warning(f"⚠️ Verification failed: {', '.join(verification_failed)}")
         return False
     
     if failed:
-        logger.warning("⚠️  Some downloads failed, but existing models are verified")
+        logger.warning("⚠️ Some downloads failed, but existing models are verified")
         return False
     else:
         logger.info("✅ All models downloaded and verified successfully!")
@@ -869,16 +870,16 @@ def main():
     parser.add_argument("--retries", type=int, default=3, help="Number of retry attempts for failed downloads")
     
     args = parser.parse_args()
-    
+
     if args.list:
         logger.info("📋 Available models:")
         for model_id, config in sorted(MODELS.items(), key=lambda x: x[1]["priority"]):
             priority_text = "🔥" if config["priority"] <= 3 else "📦"
             status = "✅" if verify_model_integrity(model_id) else "❌"
-            logger.info(f"  {priority_text} {status} {model_id}: {config['name']} (~{config['size_gb']}GB)")
-            logger.info(f"     {config['description']}")
+            logger.info(f" {priority_text} {status} {model_id}: {config['name']} (~{config['size_gb']}GB)")
+            logger.info(f" {config['description']}")
         return
-    
+
     if args.verify:
         logger.info("🔍 Verifying all model downloads...")
         all_good = True
@@ -892,28 +893,28 @@ def main():
         if all_good:
             logger.info("🎉 All models verified successfully!")
         else:
-            logger.error("⚠️  Some models failed verification!")
+            logger.error("⚠️ Some models failed verification!")
             sys.exit(1)
         return
-    
+
     if args.model:
         if args.model not in MODELS:
             logger.error(f"Unknown model: {args.model}")
             logger.info("Available models:", list(MODELS.keys()))
             return
-        
+
         # Use special handling for Bark models
         if args.model == "bark":
             success = download_bark_models()
         else:
             success = download_model_with_retry(args.model, args.force, max_retries=args.retries)
-            
+
         if success and verify_model_integrity(args.model):
             logger.info("✅ Model download and verification completed successfully!")
         else:
             logger.error("❌ Model download or verification failed!")
             sys.exit(1)
-        
+
     elif args.all or args.priority:
         success = download_all_models(args.force, args.priority)
         if success:
@@ -921,7 +922,6 @@ def main():
         else:
             logger.error("❌ Some model downloads failed!")
             sys.exit(1)
-    
     else:
         parser.print_help()
 

@@ -57,6 +57,8 @@ export default function Page() {
     status: string;
     message: string;
     error: string | null;
+    download_queue: string[];
+    currently_downloading: string | null;
     models?: {
       [key: string]: {
         name: string;
@@ -76,10 +78,25 @@ export default function Page() {
     current_model: "",
     status: "idle",
     message: "",
-    error: null
+    error: null,
+    download_queue: [],
+    currently_downloading: null
   });
   
   const [clearingData, setClearingData] = useState(false);
+
+  // Helper: determine if any model is actually downloaded (has size > 0)
+  const hasAnyDownloaded = (
+    (models.video_models || []).some(m => (m.size_gb || 0) > 0) ||
+    (models.image_models || []).some(m => (m.size_gb || 0) > 0) ||
+    (models.audio_models || []).some(m => (m.size_gb || 0) > 0)
+  );
+
+  // Normalize frontend model ids to backend ids for downloads
+  const normalizeModelId = (modelId: string) => {
+    if (modelId === 'stable-diffusion') return 'stable_diffusion';
+    return modelId;
+  };
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -228,20 +245,36 @@ export default function Page() {
     }
   };
 
-  const downloadModel = async (modelName: string, force = false) => {
-    // Clear any previous download status and show initial state
-    setDownloadStatus({
-      is_downloading: true,
-      overall_progress: 0,
-      current_model: modelName,
-      status: 'downloading',
-      message: force ? `Force re-downloading ${modelName}...` : `Starting ${modelName} download...`,
-      error: null
-    });
+  // REMOVED: Individual model download function
+  
+  const processDownloadQueue = async () => {
+    const currentState = downloadStatus;
+    if (currentState.currently_downloading || (currentState.download_queue || []).length === 0) {
+      return; // Already downloading or no queue
+    }
+    
+    const nextModel = (currentState.download_queue || [])[0];
+    if (!nextModel) return;
+    
+    // Update status to start downloading the next model
+    setDownloadStatus(prev => ({
+      ...prev,
+      currently_downloading: nextModel,
+      download_queue: (prev.download_queue || []).slice(1),
+      models: {
+        ...(prev.models || {}),
+        [nextModel]: {
+          ...(prev.models?.[nextModel] || {}),
+          status: 'downloading',
+          progress: 0,
+          downloaded_mb: 0
+        }
+      }
+    }));
     
     try {
       // Use streaming endpoint for real-time progress
-      const response = await fetch(getApiUrl(`/download-model-stream/${modelName}?force=${force}`), {
+      const response = await fetch(getApiUrl(`/download-model-stream/${nextModel}?force=false`), {
         headers: {
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache'
@@ -278,18 +311,19 @@ export default function Page() {
                 setDownloadStatus(prev => ({
                   ...prev,
                   is_downloading: true,
-                  current_model: modelName,
-                  overall_progress: typeof data.progress === 'number' ? data.progress : prev.overall_progress,
                   message: data.message || prev.message,
                   models: {
                     ...(prev.models || {}),
-                    [modelName]: {
-                      ...(prev.models?.[modelName] || {}),
+                    [nextModel]: {
+                      name: nextModel,
+                      repo_id: prev.models?.[nextModel]?.repo_id,
+                      local_dir: prev.models?.[nextModel]?.local_dir,
+                      size_gb: prev.models?.[nextModel]?.size_gb,
+                      status: 'downloading',
                       progress: data.progress ?? 0,
                       downloaded_mb: data.downloaded_mb ?? 0,
-                      status: 'downloading',
-                      name: modelName,
-                      size_gb: prev.models?.[modelName]?.size_gb || undefined
+                      eta_seconds: prev.models?.[nextModel]?.eta_seconds,
+                      files_verified: prev.models?.[nextModel]?.files_verified
                     }
                   }
                 }));
@@ -301,25 +335,69 @@ export default function Page() {
                 }));
                 console.log('Download log:', data.message);
               } else if (data.type === 'success') {
-                // Download completed successfully
-                setDownloadStatus(prev => ({
-                  ...prev,
-                  status: 'completed',
-                  message: data.message,
-                  is_downloading: false
-                }));
+                // Download completed successfully (per-model)
+                setDownloadStatus(prev => {
+                  const updatedModels = {
+                    ...(prev.models || {}),
+                    [nextModel]: {
+                      name: nextModel,
+                      repo_id: prev.models?.[nextModel]?.repo_id,
+                      local_dir: prev.models?.[nextModel]?.local_dir,
+                      size_gb: prev.models?.[nextModel]?.size_gb,
+                      status: 'done',
+                      progress: 100,
+                      downloaded_mb: prev.models?.[nextModel]?.downloaded_mb ?? 0,
+                      eta_seconds: prev.models?.[nextModel]?.eta_seconds,
+                      files_verified: true
+                    }
+                  } as typeof prev.models;
+                  const anyActive = Object.values(updatedModels || {}).some((m: any) => m && m.status === 'downloading') || (prev.download_queue || []).length > 0;
+                  return {
+                    ...prev,
+                    status: anyActive ? 'downloading' : 'completed',
+                    message: data.message,
+                    is_downloading: anyActive,
+                    currently_downloading: null,
+                    models: updatedModels
+                  };
+                });
                 
                 // Refresh models list
                 fetchModels();
+                
+                // Process next in queue
+                setTimeout(() => processDownloadQueue(), 1000);
                 break;
               } else if (data.type === 'error') {
-                // Download failed
-                setDownloadStatus(prev => ({
-                  ...prev,
-                  status: 'error',
-                  error: data.message,
-                  is_downloading: false
-                }));
+                // Download failed (per-model)
+                setDownloadStatus(prev => {
+                  const updatedModels = {
+                    ...(prev.models || {}),
+                    [nextModel]: {
+                      name: nextModel,
+                      repo_id: prev.models?.[nextModel]?.repo_id,
+                      local_dir: prev.models?.[nextModel]?.local_dir,
+                      size_gb: prev.models?.[nextModel]?.size_gb,
+                      status: 'error',
+                      progress: prev.models?.[nextModel]?.progress ?? 0,
+                      downloaded_mb: prev.models?.[nextModel]?.downloaded_mb ?? 0,
+                      eta_seconds: prev.models?.[nextModel]?.eta_seconds,
+                      files_verified: false
+                    }
+                  } as typeof prev.models;
+                  const anyActive = Object.values(updatedModels || {}).some((m: any) => m && m.status === 'downloading') || (prev.download_queue || []).length > 0;
+                  return {
+                    ...prev,
+                    status: 'error',
+                    error: data.message,
+                    is_downloading: anyActive,
+                    currently_downloading: null,
+                    models: updatedModels
+                  };
+                });
+                
+                // Process next in queue even on error
+                setTimeout(() => processDownloadQueue(), 1000);
                 break;
               }
             } catch (parseError) {
@@ -335,8 +413,12 @@ export default function Page() {
         ...prev,
         status: 'error',
         error: error instanceof Error ? error.message : 'Unknown error',
-        is_downloading: false
+        is_downloading: Object.values(prev.models || {}).some(m => (m as any).status === 'downloading') || (prev.download_queue || []).length > 0,
+        currently_downloading: null
       }));
+      
+      // Process next in queue even on error
+      setTimeout(() => processDownloadQueue(), 1000);
     }
   };
 
@@ -389,6 +471,16 @@ export default function Page() {
       
       if (response.ok) {
         const result = await response.json();
+        
+        // Reset models state to force refresh
+        setModels({
+          video_models: [],
+          image_models: [],
+          audio_models: []
+        });
+        
+        // Wait a moment for backend to process deletion
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Refresh models after deletion
         await fetchModels();
@@ -493,8 +585,15 @@ export default function Page() {
                       <Play className="h-5 w-5 text-accent-blue" />
                       <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Video Models</h4>
                     </div>
-                    {models.video_models.map((model) => (
-                      <div key={model.id} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
+                    {models.video_models.map((model, index) => {
+                      const normId = normalizeModelId(model.id);
+                      const per = downloadStatus.models?.[normId];
+                      const isThisDownloading = per?.status === 'downloading';
+                      const isThisQueued = per?.status === 'queued';
+                      const thisProgress = per?.progress ?? 0;
+                      const thisDownloaded = per?.downloaded_mb ?? 0;
+                      return (
+                      <div key={model.id || `video-${index}`} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between mb-3">
                           <div>
                             <span className="font-semibold text-sm text-gray-900 dark:text-slate-100">{model.name}</span>
@@ -520,10 +619,10 @@ export default function Page() {
                               </button>
                             ) : (
                               <>
-                              {downloadStatus.is_downloading && downloadStatus.current_model === model.id ? (
+                              {isThisDownloading ? (
                                 <button
                                   onClick={async () => {
-                                    await fetch(getApiUrl(`/cancel-download/${model.id}`), { method: 'POST' });
+                                    await fetch(getApiUrl(`/cancel-download/${normId}`), { method: 'POST' });
                                     fetchModels();
                                     setDownloadStatus(prev => ({ ...prev, is_downloading: false, current_model: '', message: '', overall_progress: 0 }));
                                   }}
@@ -531,33 +630,25 @@ export default function Page() {
                                 >
                                   Cancel
                                 </button>
-                              ) : (
-                                <button
-                                  onClick={() => downloadModel(model.id, false)}
-                                  className="p-1 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                                  title={`Download ${model.name}`}
-                                >
-                                  <CloudDownload className="h-3 w-3 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300" />
-                                </button>
-                              )}
+                              ) : null}
                               </>
                             )}
                           </div>
                         </div>
                         
                         {/* Download Progress */}
-                        {downloadStatus.is_downloading && downloadStatus.current_model === model.id && (
+                        {isThisDownloading && (
                           <div className="mb-2">
                             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
                               <span>Downloading...</span>
                               <span>
-                                {downloadStatus.models?.[model.id]?.downloaded_mb ?? 0} MB • {downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%
+                                {thisDownloaded} MB • {thisProgress}%
                               </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                               <div 
                                 className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%` }}
+                                style={{ width: `${thisProgress}%` }}
                               ></div>
                             </div>
                             <p className="text-xs text-gray-500 mt-1 truncate">{downloadStatus.message}</p>
@@ -573,7 +664,7 @@ export default function Page() {
                           )}
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
 
@@ -584,8 +675,15 @@ export default function Page() {
                       <ImageIcon className="h-5 w-5 text-accent-green" />
                       <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Image Models</h4>
                     </div>
-                    {models.image_models && models.image_models.map((model) => (
-                      <div key={model.id} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
+                    {models.image_models && models.image_models.map((model, index) => {
+                      const normId = normalizeModelId(model.id);
+                      const per = downloadStatus.models?.[normId];
+                      const isThisDownloading = per?.status === 'downloading';
+                      const isThisQueued = per?.status === 'queued';
+                      const thisProgress = per?.progress ?? 0;
+                      const thisDownloaded = per?.downloaded_mb ?? 0;
+                      return (
+                      <div key={model.id || `image-${index}`} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between mb-3">
                           <div>
                             <span className="font-semibold text-sm text-gray-900 dark:text-slate-100">{model.name}</span>
@@ -595,13 +693,11 @@ export default function Page() {
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className={`px-2 py-1 rounded-full text-xs ${
-                              model.loaded 
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400' 
-                                : (model.size_gb && model.size_gb > 0)
-                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
-                                  : 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
+                              model.size_gb && model.size_gb > 0
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
                             }`}>
-                            {model.loaded ? 'Loaded' : ((model.size_gb && model.size_gb > 0) ? 'Available' : 'Not Available')}
+                            {model.size_gb && model.size_gb > 0 ? 'Available' : 'Download'}
                             </div>
                             {model.size_gb && model.size_gb > 0 ? (
                               <button
@@ -613,10 +709,10 @@ export default function Page() {
                               </button>
                             ) : (
                               <>
-                              {downloadStatus.is_downloading && downloadStatus.current_model === model.id ? (
+                              {isThisDownloading ? (
                                 <button
                                   onClick={async () => {
-                                    await fetch(getApiUrl(`/cancel-download/${model.id}`), { method: 'POST' });
+                                    await fetch(getApiUrl(`/cancel-download/${normId}`), { method: 'POST' });
                                     fetchModels();
                                     setDownloadStatus(prev => ({ ...prev, is_downloading: false, current_model: '', message: '', overall_progress: 0 }));
                                   }}
@@ -624,33 +720,25 @@ export default function Page() {
                                 >
                                   Cancel
                                 </button>
-                              ) : (
-                                <button
-                                  onClick={() => downloadModel(model.id, false)}
-                                  className="p-1 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                                  title={`Download ${model.name}`}
-                                >
-                                  <CloudDownload className="h-3 w-3 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300" />
-                                </button>
-                              )}
+                              ) : null}
                               </>
                             )}
                           </div>
                         </div>
                         
                         {/* Download Progress */}
-                        {downloadStatus.is_downloading && downloadStatus.current_model === model.id && (
+                        {isThisDownloading && (
                           <div className="mb-2">
                             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
                               <span>Downloading...</span>
                               <span>
-                                {downloadStatus.models?.[model.id]?.downloaded_mb ?? 0} MB • {downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%
+                                {thisDownloaded} MB • {thisProgress}%
                               </span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                               <div 
                                 className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${downloadStatus.models?.[model.id]?.progress ?? downloadStatus.overall_progress}%` }}
+                                style={{ width: `${thisProgress}%` }}
                               ></div>
                             </div>
                             <p className="text-xs text-gray-500 mt-1 truncate">{downloadStatus.message}</p>
@@ -666,7 +754,7 @@ export default function Page() {
                           )}
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
 
@@ -677,8 +765,14 @@ export default function Page() {
                       <Volume2 className="h-5 w-5 text-accent-violet" />
                       <h4 className="font-semibold text-sm text-gray-900 dark:text-slate-100">Audio Models</h4>
                     </div>
-                    {models.audio_models.map((model) => (
-                      <div key={model.id} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
+                    {models.audio_models.map((model, index) => {
+                      const normId = normalizeModelId(model.id);
+                      const per = downloadStatus.models?.[normId];
+                      const isThisDownloading = per?.status === 'downloading';
+                      const isThisQueued = per?.status === 'queued';
+                      const thisProgress = per?.progress ?? 0;
+                      return (
+                      <div key={model.id || `audio-${index}`} className="p-4 rounded-xl bg-white dark:bg-slate-800/50 border border-gray-200 dark:border-slate-600 shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between mb-3">
                           <div>
                             <span className="font-semibold text-sm text-gray-900 dark:text-slate-100">{model.name}</span>
@@ -702,33 +796,55 @@ export default function Page() {
                               >
                                 <Trash2 className="h-3 w-3 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" />
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => downloadModel(model.id, false)}
-                                className="p-1 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/20 transition-colors"
-                                title={`Download ${model.name}`}
-                                disabled={downloadStatus.is_downloading && downloadStatus.current_model === model.id}
-                              >
-                                <CloudDownload className="h-3 w-3 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300" />
-                              </button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                         
                         {/* Download Progress */}
-                        {downloadStatus.is_downloading && downloadStatus.current_model === model.id && (
+                        {isThisDownloading && (
                           <div className="mb-2">
                             <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
                               <span>Downloading...</span>
-                              <span>{downloadStatus.overall_progress}%</span>
+                              <span>{thisProgress}%</span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                               <div 
                                 className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${downloadStatus.overall_progress}%` }}
+                                style={{ width: `${thisProgress}%` }}
                               ></div>
                             </div>
                             <p className="text-xs text-gray-500 mt-1 truncate">{downloadStatus.message}</p>
+                          </div>
+                        )}
+                        
+                        {/* Queue Status */}
+                        {isThisQueued && (
+                          <div className="mb-2">
+                            <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                              <span>Queued for download...</span>
+                              <button
+                                onClick={() => {
+                                  setDownloadStatus(prev => ({
+                                    ...prev,
+                                    download_queue: (prev.download_queue || []).filter(id => id !== normId),
+                                    models: {
+                                      ...(prev.models || {}),
+                                      [normId]: {
+                                        ...(prev.models?.[normId] || {}),
+                                        status: 'pending'
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                title="Remove from queue"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div className="bg-yellow-500 h-2 rounded-full w-full animate-pulse"></div>
+                            </div>
                           </div>
                         )}
                         
@@ -741,7 +857,7 @@ export default function Page() {
                           )}
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
               </div>
@@ -802,26 +918,10 @@ export default function Page() {
               </p>
             </div>
             
-            {/* Show delete button if models are downloaded and not downloading */}
-            {!downloadStatus.is_downloading && (models.video_models.length > 0 || models.audio_models.length > 0 || (models.image_models && models.image_models.length > 0)) ? (
+            {/* Always show download button */}
+            <div className="flex flex-col space-y-2">
               <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to delete all downloaded models?')) {
-                    deleteModels();
-                  }
-                }}
-                className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/30"
-              >
-                <div className="flex items-center space-x-2">
-                  <Trash2 className="h-4 w-4" />
-                  <span>Delete Models</span>
-                </div>
-              </button>
-              ) : (
-              /* Show download buttons if no models are downloaded */
-              <div className="flex flex-col space-y-2">
-              <button
-                  onClick={() => startDownload(false)}
+                onClick={() => startDownload(false)}
                 className="px-6 py-3 rounded-xl font-semibold transition-all duration-200 hover:scale-105 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20 border border-accent-blue/30"
               >
                 <div className="flex items-center space-x-2">
@@ -829,8 +929,7 @@ export default function Page() {
                   <span>Download Models</span>
                 </div>
               </button>
-              </div>
-              )}
+            </div>
               
           </div>
         </div>

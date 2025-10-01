@@ -19,6 +19,7 @@ import threading
 
 from models.video_generator import VideoGenerator
 from models.audio_generator import AudioGenerator
+from models.image_generator import ImageGenerator
 from utils.gpu_detector import GPUDetector
 from utils.ffmpeg_handler import FFmpegHandler
 import shutil
@@ -58,6 +59,7 @@ job_queue = JobQueue()
 # Global model instances
 video_generator = None
 audio_generator = None
+image_generator = None
 
 # Unified model download status tracking
 download_status = {
@@ -455,7 +457,7 @@ def download_all_models_background():
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application on startup"""
-    global video_generator, audio_generator
+    global video_generator, audio_generator, image_generator
     
     # Detect GPU and set up models
     gpu_info = gpu_detector.detect_gpu()
@@ -464,6 +466,7 @@ async def startup_event():
     # Initialize generators (but don't load models yet)
     video_generator = VideoGenerator(gpu_info)
     audio_generator = AudioGenerator(gpu_info)
+    image_generator = ImageGenerator(gpu_info)
     
     print("Backend started successfully. Models will be loaded when requested.")
     print("Use the 'Download Models' button in the UI to download and load models.")
@@ -547,7 +550,7 @@ async def get_settings():
 
 @app.post("/outputs/clear")
 async def clear_outputs():
-    """Delete all files in outputs directory"""
+    """Delete all files in outputs directory, except voice previews."""
     outputs_dir = config.outputs_path
     if not outputs_dir.exists():
         return {"message": "Outputs directory does not exist", "deleted_files": 0, "freed_space_mb": 0}
@@ -556,9 +559,16 @@ async def clear_outputs():
         deleted_files = 0
         total_size = 0
         
-        # Delete all files in outputs directory
+        # Delete all files in outputs directory, skipping voice previews
         for file_path in outputs_dir.rglob('*'):
             if file_path.is_file():
+                # Skip files in voice previews directory
+                try:
+                    file_path.relative_to(config.voice_previews_path)
+                    # Inside voice previews -> skip
+                    continue
+                except ValueError:
+                    pass
                 try:
                     file_size = file_path.stat().st_size
                     total_size += file_size
@@ -569,9 +579,12 @@ async def clear_outputs():
                     print(f"Error deleting {file_path}: {e}")
                     continue
         
-        # Also clear any subdirectories
+        # Also clear any subdirectories EXCEPT voice previews dir
         for subdir in outputs_dir.iterdir():
             if subdir.is_dir():
+                # Preserve voice previews directory
+                if subdir.resolve() == config.voice_previews_path.resolve():
+                    continue
                 try:
                     shutil.rmtree(subdir)
                     print(f"Deleted output directory: {subdir}")
@@ -756,30 +769,18 @@ async def delete_output_file(file_type: str, filename: str):
 @app.get("/models")
 async def get_available_models():
     """Get list of available models"""
-    global video_generator, audio_generator
+    global video_generator, audio_generator, image_generator
     
     # Initialize generators if they don't exist
-    if not video_generator or not audio_generator:
+    if not video_generator or not audio_generator or not image_generator:
         gpu_info = gpu_detector.detect_gpu()
         video_generator = VideoGenerator(gpu_info)
         audio_generator = AudioGenerator(gpu_info)
-    
-    # Separate models by type
-    all_video_models = video_generator.get_available_models() if video_generator else []
-    
-    # Split video models into video and image categories
-    video_models = []
-    image_models = []
-    
-    for model in all_video_models:
-        if model['id'] in ['stable-diffusion']:
-            image_models.append(model)
-        else:
-            video_models.append(model)
+        image_generator = ImageGenerator(gpu_info)
     
     return {
-        "video_models": video_models,
-        "image_models": image_models,
+        "video_models": video_generator.get_available_models() if video_generator else [],
+        "image_models": image_generator.get_available_models() if image_generator else [],
         "audio_models": audio_generator.get_available_models() if audio_generator else []
     }
 
@@ -1156,7 +1157,7 @@ async def load_models():
         raise HTTPException(status_code=500, detail=f"Failed to load models: {str(e)}")
 
 @app.get("/download-models-stream")
-async def download_models_stream(force: bool = False):
+async def download_models_stream(force: bool = False, retries: int = 5):
     """Stream download progress in real-time"""
     
     def generate_download_logs():
@@ -1164,7 +1165,7 @@ async def download_models_stream(force: bool = False):
         try:
             # Prepare the download command
             script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
-            cmd = [sys.executable, str(script_path), "--all"]
+            cmd = [sys.executable, str(script_path), "--all", "--retries", str(retries)]
             
             if force:
                 cmd.append("--force")
@@ -1181,6 +1182,11 @@ async def download_models_stream(force: bool = False):
             # Stream output line by line
             for line in iter(process.stdout.readline, ''):
                 if line:
+                    # Mirror to backend terminal for visibility
+                    try:
+                        print(line.strip())
+                    except Exception:
+                        pass
                     # Format as Server-Sent Events
                     yield f"data: {json.dumps({'type': 'log', 'message': line.strip()})}\n\n"
             
@@ -1205,140 +1211,11 @@ async def download_models_stream(force: bool = False):
         }
     )
 
-@app.get("/download-model-stream/{model_name}")
-async def download_model_stream(model_name: str, force: bool = False):
-    """Stream download progress for a specific model"""
-    
-    def generate_model_download_logs():
-        """Generator function that yields model download logs in real-time"""
-        try:
-            # Map model to repo/local dir
-            model_map = download_status["models"]
-            if model_name not in model_map:
-                yield f"data: {json.dumps({'type': 'error', 'message': f'Unknown model: {model_name}'})}\n\n"
-                return
-
-            info = model_map[model_name]
-            repo_id = info["repo_id"]
-            local_dir = info["local_dir"]
-
-            # Ensure directory exists
-            os.makedirs(local_dir, exist_ok=True)
-
-            yield f"data: {json.dumps({'type': 'log', 'message': f'Starting download for {model_name} ({repo_id})'})}\n\n"
-
-            # Use the download script with proper progress tracking
-            script_path = pathlib.Path(__file__).parent.parent / "scripts" / "download-models.py"
-            cmd = [sys.executable, str(script_path), "--model", model_name]
-            if force:
-                cmd.append("--force")
-
-            cmd_str = " ".join(cmd)
-            yield f"data: {json.dumps({'type': 'log', 'message': f'Running: {cmd_str}'})}\n\n"
-
-            # Start the download process
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1
-            )
-
-            # Track progress
-            total_size_gb = info.get("size_gb", 0)
-            downloaded_size = 0
-            start_time = time.time()
-            
-            # Read output line by line
-            for line in iter(process.stdout.readline, ''):
-                if not line:
-                    break
-                    
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # Parse progress from the script output
-                progress_data = {
-                    'type': 'log',
-                    'message': line,
-                    'model_id': model_name,
-                    'size_gb': total_size_gb
-                }
-                
-                # Try to extract progress information from the line
-                if 'Downloading' in line and 'MB/s' in line:
-                    # Extract download speed and progress
-                    try:
-                        # Look for patterns like "100%|████████████| 1.2GB/1.2GB [00:30<00:00, 40.5MB/s]"
-                        import re
-                        progress_match = re.search(r'(\d+)%', line)
-                        speed_match = re.search(r'(\d+\.?\d*)MB/s', line)
-                        size_match = re.search(r'(\d+\.?\d*)(GB|MB)/(\d+\.?\d*)(GB|MB)', line)
-                        
-                        if progress_match:
-                            progress_percent = int(progress_match.group(1))
-                            progress_data['type'] = 'progress'
-                            progress_data['progress'] = progress_percent
-                            progress_data['overall_progress'] = progress_percent
-                            
-                            if speed_match:
-                                speed_mbps = float(speed_match.group(1))
-                                progress_data['speed_mbps'] = speed_mbps
-                            
-                            if size_match:
-                                downloaded = float(size_match.group(1))
-                                downloaded_unit = size_match.group(2)
-                                total = float(size_match.group(3))
-                                total_unit = size_match.group(4)
-                                
-                                # Convert to MB
-                                if downloaded_unit == 'GB':
-                                    downloaded_mb = downloaded * 1024
-                                else:
-                                    downloaded_mb = downloaded
-                                    
-                                if total_unit == 'GB':
-                                    total_mb = total * 1024
-                                else:
-                                    total_mb = total
-                                
-                                progress_data['downloaded_mb'] = downloaded_mb
-                                progress_data['total_mb'] = total_mb
-                                
-                                # Calculate ETA
-                                if speed_mbps > 0:
-                                    remaining_mb = total_mb - downloaded_mb
-                                    eta_seconds = remaining_mb / speed_mbps
-                                    progress_data['eta_seconds'] = eta_seconds
-                    except Exception as e:
-                        # If parsing fails, just log the message
-                        pass
-                
-                yield f"data: {json.dumps(progress_data)}\n\n"
-
-            # Wait for process to complete
-            return_code = process.wait()
-            
-            if return_code == 0:
-                yield f"data: {json.dumps({'type': 'success', 'message': f'Successfully downloaded {model_name}'})}\n\n"
-            else:
-                yield f"data: {json.dumps({'type': 'error', 'message': f'Download failed for {model_name} (exit code: {return_code})'})}\n\n"
-
-        except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Error during download: {str(e)}'})}\n\n"
-    
-    return StreamingResponse(
-        generate_model_download_logs(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control"
-        }
-    )
+# REMOVED: Individual model download endpoint
+# @app.get("/download-model-stream/{model_name}")
+# async def download_model_stream(model_name: str, force: bool = False, retries: int = 5):
+#     """Stream download progress for a specific model"""
+#     # ... entire function removed ...
 
 @app.delete("/delete-model/{model_name}")
 async def delete_model(model_name: str):
@@ -1886,10 +1763,25 @@ async def generate_image_task(job_id: str, request: GenerationRequest):
         def progress_callback(progress: int, message: str = ""):
             job_queue.update_job(job_id, {"progress": progress, "message": message})
         
-        # Reuse video_generator for image model loaders
-        output_path = await video_generator.generate_image(
+        # Use dedicated image generator
+        global image_generator
+        if not image_generator:
+            gpu_info = gpu_detector.detect_gpu()
+            image_generator = ImageGenerator(gpu_info)
+        
+        # Extract image generation parameters
+        width = getattr(request, 'width', 512)
+        height = getattr(request, 'height', 512)
+        num_inference_steps = getattr(request, 'num_inference_steps', 30)
+        guidance_scale = getattr(request, 'guidance_scale', 8.5)
+        
+        output_path = await image_generator.generate_image(
             prompt=request.prompt,
             model_name=request.model_name,
+            width=width,
+            height=height,
+            num_inference_steps=num_inference_steps,
+            guidance_scale=guidance_scale,
             progress_callback=progress_callback
         )
         

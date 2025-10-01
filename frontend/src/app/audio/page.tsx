@@ -18,7 +18,7 @@ export default function Page() {
     model: 'bark'
   });
   const [showSettings, setShowSettings] = useState(false);
-  const [voicePreviews, setVoicePreviews] = useState<{[key: string]: string}>({});
+  const [voicePreviews, setVoicePreviews] = useState<{[key: string]: { wavUrl: string; mp3Url: string; presetMp3Url: string } }>({});
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const [barkVoices, setBarkVoices] = useState<any[]>([]);
   const [recording, setRecording] = useState(false);
@@ -36,23 +36,25 @@ export default function Page() {
 
   const fetchVoicePreviews = async () => {
     try {
-      // Fetch voice previews from the API endpoint that returns both generated and preset files
-      const response = await fetch(getApiUrl('/voice-previews'));
-      if (response.ok) {
-        const data = await response.json();
-        const previewMap: {[key: string]: string} = {};
-        
-        // Create a map of voice IDs to their preview URLs
-        data.previews.forEach((preview: any) => {
-          previewMap[preview.voice_id] = getApiUrl(preview.url);
-        });
-        
-        setVoicePreviews(previewMap);
-      } else {
-        console.error('Failed to fetch voice previews:', response.statusText);
-      }
+      // Build voice preview URLs directly, preferring WAV from outputs/voice-previews
+      const englishSpeakers = [
+        'v2/en_speaker_0', 'v2/en_speaker_1', 'v2/en_speaker_2', 'v2/en_speaker_3', 'v2/en_speaker_4',
+        'v2/en_speaker_5', 'v2/en_speaker_6', 'v2/en_speaker_7', 'v2/en_speaker_8', 'v2/en_speaker_9'
+      ];
+
+      const previewMap: {[key: string]: { wavUrl: string; mp3Url: string; presetMp3Url: string } } = {};
+      englishSpeakers.forEach((voiceId) => {
+        const base = voiceId.replace('/', '_');
+        previewMap[voiceId] = {
+          wavUrl: getApiUrl(`/outputs/voice-previews/${base}-preview.wav`),
+          mp3Url: getApiUrl(`/outputs/voice-previews/${base}-preview.mp3`),
+          presetMp3Url: getApiUrl(`/models/audio/bark/preset-audios/${base}-preview.mp3`)
+        };
+      });
+
+      setVoicePreviews(previewMap);
     } catch (error) {
-      console.error('Error fetching voice previews:', error);
+      console.error('Error building voice previews:', error);
     }
   };
 
@@ -181,10 +183,52 @@ export default function Page() {
   const playVoicePreview = async (voiceId: string) => {
     try {
       setPlayingPreview(voiceId);
-      const audio = new Audio(voicePreviews[voiceId]);
-      audio.onended = () => setPlayingPreview(null);
-      audio.onerror = () => setPlayingPreview(null);
-      await audio.play();
+      const urls = voicePreviews[voiceId];
+      if (!urls) {
+        setPlayingPreview(null);
+        return;
+      }
+
+      // Try WAV first, then MP3 in outputs, then preset MP3
+      const candidates = [urls.wavUrl, urls.mp3Url, urls.presetMp3Url];
+
+      let played = false;
+      for (const src of candidates) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const audio = new Audio(src);
+            let resolved = false;
+            audio.onended = () => {
+              if (!resolved) {
+                resolved = true;
+                setPlayingPreview(null);
+                resolve();
+              }
+            };
+            audio.oncanplay = async () => {
+              try {
+                await audio.play();
+                played = true;
+              } catch (e) {
+                // ignore play error and try next
+              }
+            };
+            audio.onerror = () => {
+              if (!resolved) {
+                resolved = true;
+                reject(new Error('Audio load error'));
+              }
+            };
+          });
+          if (played) break;
+        } catch {
+          // try next source
+        }
+      }
+
+      if (!played) {
+        setPlayingPreview(null);
+      }
     } catch (error) {
       console.error('Failed to play voice preview:', error);
       setPlayingPreview(null);
