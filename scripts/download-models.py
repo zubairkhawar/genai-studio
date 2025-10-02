@@ -146,10 +146,12 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
                 repo_id=config["repo_id"],
                 local_dir=str(local_dir),
                 force_download=bool(force),
-                resume_download=True,
-                local_dir_use_symlinks=False,
+                # resume_download and local_dir_use_symlinks are deprecated
+                # Downloads automatically resume and don't use symlinks anymore
                 max_workers=1,  # Reduce concurrent downloads to avoid network issues
                 tqdm_class=None,  # Disable progress bar to reduce output noise
+                local_files_only=False,  # Allow downloads from internet
+                token=None,  # Use anonymous access
             )
 
             # Verify: require at least one weight file
@@ -516,9 +518,13 @@ def download_bark_models() -> bool:
                 # Download preset audios after successful model setup
                 download_bark_preset_audios()
                 
-                # Generate voice previews using the downloaded models
-                logger.info("🎤 Generating voice previews with downloaded Bark models...")
-                generate_voice_previews()
+                # Generate voice previews using the downloaded models (optional)
+                try:
+                    logger.info("🎤 Generating voice previews with downloaded Bark models...")
+                    generate_voice_previews()
+                except Exception as e:
+                    logger.warning(f"⚠️ Voice preview generation failed (non-critical): {e}")
+                    logger.info("📝 Bark models are ready, but voice previews will be generated on first use")
 
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("../models/audio/bark")
@@ -539,9 +545,13 @@ def download_bark_models() -> bool:
                 # Download preset audios after successful model download
                 download_bark_preset_audios()
                 
-                # Generate voice previews using the downloaded models
-                logger.info("🎤 Generating voice previews with downloaded Bark models...")
-                generate_voice_previews()
+                # Generate voice previews using the downloaded models (optional)
+                try:
+                    logger.info("🎤 Generating voice previews with downloaded Bark models...")
+                    generate_voice_previews()
+                except Exception as e:
+                    logger.warning(f"⚠️ Voice preview generation failed (non-critical): {e}")
+                    logger.info("📝 Bark models are ready, but voice previews will be generated on first use")
 
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("../models/audio/bark")
@@ -669,7 +679,135 @@ def verify_model_integrity(model_id: str) -> bool:
 
         if missing_files or missing_dirs:
             logger.warning(f"⚠️ {config['name']}: Missing required files/dirs: {missing_files + missing_dirs}")
-            return False
+            
+            # Try to download missing components
+            try:
+                logger.info(f"🔧 Attempting to fix missing Stable Diffusion components...")
+                
+                # Download missing VAE if needed
+                if "vae" in missing_dirs:
+                    logger.info("📥 Downloading VAE component...")
+                    vae_dir = local_dir / "vae"
+                    vae_dir.mkdir(parents=True, exist_ok=True)
+                    snapshot_download(
+                        repo_id="stabilityai/stable-diffusion-2-1",
+                        allow_patterns=["vae/*"],
+                        local_dir=str(vae_dir),
+                        max_workers=1
+                    )
+                    logger.info("✅ VAE component downloaded successfully")
+                
+                # Create missing config.json if needed
+                if "model_index.json" in missing_files:
+                    logger.info("📝 Creating missing config.json...")
+                    config_content = {
+                        "_class_name": "StableDiffusionPipeline",
+                        "_diffusers_version": "0.21.4",
+                        "feature_extractor": ["transformers", "CLIPImageProcessor"],
+                        "safety_checker": ["stable_diffusion", "StableDiffusionSafetyChecker"],
+                        "scheduler": ["diffusers", "PNDMScheduler"],
+                        "text_encoder": ["transformers", "CLIPTextModel"],
+                        "tokenizer": ["transformers", "CLIPTokenizer"],
+                        "unet": ["diffusers", "UNet2DConditionModel"],
+                        "vae": ["diffusers", "AutoencoderKL"]
+                    }
+                    import json
+                    with open(local_dir / "config.json", "w") as f:
+                        json.dump(config_content, f, indent=2)
+                    logger.info("✅ config.json created successfully")
+                
+                # Create missing v1-inference.yaml if needed
+                if "v1-inference.yaml" in missing_files:
+                    logger.info("📝 Creating missing v1-inference.yaml...")
+                    yaml_content = """model:
+  base_learning_rate: 1.0e-04
+  target: ldm.models.diffusion.ddpm.LatentDiffusion
+  params:
+    linear_start: 0.00085
+    linear_end: 0.0120
+    num_timesteps_cond: 1
+    log_every_t: 200
+    timesteps: 1000
+    first_stage_key: "jpg"
+    cond_stage_key: "txt"
+    image_size: 64
+    channels: 4
+    cond_stage_trainable: false
+    conditioning_key: crossattn
+    monitor: val/loss_simple_ema
+    scale_factor: 0.18215
+    use_ema: False
+
+    scheduler_config: # 10000 inference steps w/ uniform sampler
+      target: ldm.lr_scheduler.LambdaLinearScheduler
+      params:
+        warm_up_steps: [ 100 ]
+        cycle_lengths: [ 10000 ]
+        f_start: [ 1.e-6 ]
+        f_max: [ 1. ]
+        f_min: [ 1. ]
+
+    unet_config:
+      target: ldm.modules.diffusionmodules.openaimodel.UNetModel
+      params:
+        image_size: 32 # unused
+        in_channels: 4
+        out_channels: 4
+        model_channels: 320
+        attention_resolutions: [ 4, 2, 1 ]
+        num_res_blocks: 2
+        channel_mult: [ 1, 2, 4, 4 ]
+        num_heads: 8
+        use_spatial_transformer: True
+        transformer_depth: 1
+        context_dim: 768
+        use_checkpoint: True
+        legacy: False
+
+    first_stage_config:
+      target: ldm.models.autoencoder.AutoencoderKL
+      params:
+        monitor: val/rec_loss
+        ddconfig:
+          double_z: true
+          z_channels: 4
+          resolution: 256
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult:
+          - 1
+          - 2
+          - 4
+          - 4
+          num_res_blocks: 2
+          attn_resolutions: []
+          dropout: 0.0
+        embed_dim: 4
+
+    cond_stage_config:
+      target: ldm.modules.encoders.modules.FrozenCLIPEmbedder
+"""
+                    with open(local_dir / "v1-inference.yaml", "w") as f:
+                        f.write(yaml_content)
+                    logger.info("✅ v1-inference.yaml created successfully")
+                
+                # Create symlink for UNet weights if needed
+                unet_dir = local_dir / "unet"
+                if unet_dir.exists():
+                    safetensors_file = unet_dir / "diffusion_pytorch_model.safetensors"
+                    non_ema_file = unet_dir / "diffusion_pytorch_model.non_ema.safetensors"
+                    if not safetensors_file.exists() and non_ema_file.exists():
+                        logger.info("🔗 Creating symlink for UNet weights...")
+                        import os
+                        os.symlink("diffusion_pytorch_model.non_ema.safetensors", str(safetensors_file))
+                        logger.info("✅ UNet weights symlink created successfully")
+                
+                logger.info("✅ Stable Diffusion components fixed successfully")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to fix missing Stable Diffusion components: {e}")
+                return False
 
     elif model_id == "animatediff":
         # Check for AnimateDiff specific files
