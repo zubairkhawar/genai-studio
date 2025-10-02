@@ -1770,10 +1770,10 @@ async def generate_image_task(job_id: str, request: GenerationRequest):
             image_generator = ImageGenerator(gpu_info)
         
         # Extract image generation parameters
-        width = getattr(request, 'width', 512)
-        height = getattr(request, 'height', 512)
-        num_inference_steps = getattr(request, 'num_inference_steps', 30)
-        guidance_scale = getattr(request, 'guidance_scale', 8.5)
+        width = request.width if request.width is not None else 1024
+        height = request.height if request.height is not None else 1024
+        num_inference_steps = request.num_inference_steps if request.num_inference_steps is not None else 50
+        guidance_scale = request.guidance_scale if request.guidance_scale is not None else 9.0
         
         output_path = await image_generator.generate_image(
             prompt=request.prompt,

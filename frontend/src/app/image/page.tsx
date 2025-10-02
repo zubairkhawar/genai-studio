@@ -24,6 +24,13 @@ export default function Page() {
   const { getMissingModels, checkModels } = useModelCheck();
   const [showDownloadModal, setShowDownloadModal] = useState(false);
 
+  // Manual settings
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [width, setWidth] = useState(1024);
+  const [height, setHeight] = useState(1024);
+  const [numInferenceSteps, setNumInferenceSteps] = useState(50);
+  const [guidanceScale, setGuidanceScale] = useState(9.0);
+
 
   useEffect(() => {
     if (!currentJobId) return;
@@ -79,7 +86,11 @@ export default function Page() {
           prompt: prompt.trim(),
           model_type: 'image',
           model_name: 'stable-diffusion',
-          output_format: 'png'
+          output_format: 'png',
+          width: width,
+          height: height,
+          num_inference_steps: numInferenceSteps,
+          guidance_scale: guidanceScale
         })
       });
       if (!res.ok) throw new Error('Failed to start');
@@ -141,6 +152,130 @@ export default function Page() {
             placeholder="A dreamy landscape with floating islands, volumetric light, high detail"
             className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800"
           />
+          
+          {/* Advanced Settings Toggle */}
+          <div className="mt-4">
+            <button
+              onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              {showAdvancedSettings ? 'Hide' : 'Show'} Advanced Settings
+            </button>
+          </div>
+
+          {/* Advanced Settings Panel */}
+          {showAdvancedSettings && (
+            <div className="mt-4 p-4 bg-gray-50 dark:bg-slate-700/50 rounded-xl space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Width */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Width (px)</label>
+                  <input
+                    type="number"
+                    value={width}
+                    onChange={(e) => setWidth(parseInt(e.target.value) || 1024)}
+                    min="256"
+                    max="2048"
+                    step="64"
+                    className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800"
+                  />
+                </div>
+
+                {/* Height */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Height (px)</label>
+                  <input
+                    type="number"
+                    value={height}
+                    onChange={(e) => setHeight(parseInt(e.target.value) || 1024)}
+                    min="256"
+                    max="2048"
+                    step="64"
+                    className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800"
+                  />
+                </div>
+
+                {/* Inference Steps */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Inference Steps</label>
+                  <input
+                    type="number"
+                    value={numInferenceSteps}
+                    onChange={(e) => setNumInferenceSteps(parseInt(e.target.value) || 50)}
+                    min="10"
+                    max="100"
+                    step="5"
+                    className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Higher = better quality, slower generation</p>
+                </div>
+
+                {/* Guidance Scale */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Guidance Scale</label>
+                  <input
+                    type="number"
+                    value={guidanceScale}
+                    onChange={(e) => setGuidanceScale(parseFloat(e.target.value) || 9.0)}
+                    min="1.0"
+                    max="20.0"
+                    step="0.5"
+                    className="w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Higher = more prompt adherence</p>
+                </div>
+              </div>
+
+              {/* Preset Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setWidth(512);
+                    setHeight(512);
+                    setNumInferenceSteps(30);
+                    setGuidanceScale(7.5);
+                  }}
+                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-slate-600 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500"
+                >
+                  Fast (512x512)
+                </button>
+                <button
+                  onClick={() => {
+                    setWidth(1024);
+                    setHeight(1024);
+                    setNumInferenceSteps(50);
+                    setGuidanceScale(9.0);
+                  }}
+                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-slate-600 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500"
+                >
+                  High Quality (1024x1024)
+                </button>
+                <button
+                  onClick={() => {
+                    setWidth(768);
+                    setHeight(1024);
+                    setNumInferenceSteps(50);
+                    setGuidanceScale(9.0);
+                  }}
+                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-slate-600 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500"
+                >
+                  Portrait (768x1024)
+                </button>
+                <button
+                  onClick={() => {
+                    setWidth(1024);
+                    setHeight(768);
+                    setNumInferenceSteps(50);
+                    setGuidanceScale(9.0);
+                  }}
+                  className="px-3 py-1 text-xs bg-gray-200 dark:bg-slate-600 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500"
+                >
+                  Landscape (1024x768)
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="mt-4">
             <button
               onClick={onGenerate}

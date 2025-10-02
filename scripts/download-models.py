@@ -695,6 +695,18 @@ def verify_model_integrity(model_id: str) -> bool:
                         local_dir=str(vae_dir),
                         max_workers=1
                     )
+                    
+                    # Fix nested VAE directory structure
+                    nested_vae = vae_dir / "vae"
+                    if nested_vae.exists():
+                        logger.info("🔧 Fixing VAE directory structure...")
+                        import shutil
+                        for item in nested_vae.iterdir():
+                            if item.is_file():
+                                shutil.move(str(item), str(vae_dir / item.name))
+                        shutil.rmtree(str(nested_vae))
+                        logger.info("✅ VAE directory structure fixed")
+                    
                     logger.info("✅ VAE component downloaded successfully")
                 
                 # Create missing config.json if needed
