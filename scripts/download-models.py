@@ -921,9 +921,8 @@ def verify_model_integrity(model_id: str) -> bool:
                 return False
 
     elif model_id == "animatediff":
-        # Check for AnimateDiff specific files
+        # Check for AnimateDiff specific files (config.json is optional)
         required_files = [
-            "config.json",
             "README.md"
         ]
         
@@ -931,6 +930,10 @@ def verify_model_integrity(model_id: str) -> bool:
         for req_file in required_files:
             if not (local_dir / req_file).exists():
                 missing_files.append(req_file)
+        
+        # Check for config.json (optional - may not exist in some AnimateDiff repos)
+        if not (local_dir / "config.json").exists():
+            logger.info(f"ℹ️ {config['name']}: No config.json found (this is normal for some AnimateDiff repositories)")
 
         # Check for motion adapter directory and files
         motion_adapter_dir = local_dir / "motion_adapter"
@@ -981,16 +984,18 @@ def verify_model_integrity(model_id: str) -> bool:
         else:
             logger.info(f"ℹ️ {config['name']}: No speaker_embeddings directory (Bark will use default voices)")
 
-        # Check for preset audios
+        # Check for preset audios (optional - Bark can work without them)
         preset_audios_dir = local_dir / "preset-audios"
         if preset_audios_dir.exists():
             english_presets = list(preset_audios_dir.glob("v2_en_speaker_*.mp3"))
-            if len(english_presets) < 20:  # Should have 10 speakers × 2 audio types
+            if len(english_presets) >= 10:  # Should have at least 10 speakers
+                logger.info(f"✅ {config['name']}: Found {len(english_presets)} preset audios")
+            else:
                 logger.warning(f"⚠️ {config['name']}: Missing English preset audios (found {len(english_presets)})")
-                return False
+                # Don't fail verification for missing preset audios - Bark can work without them
         else:
-            logger.warning(f"⚠️ {config['name']}: Missing preset-audios directory")
-            return False
+            logger.info(f"ℹ️ {config['name']}: No preset-audios directory (Bark will use default voices)")
+            # Don't fail verification for missing preset audios - Bark can work without them
 
         # Bark verification passed - core model found and preset audios available
 
