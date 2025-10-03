@@ -694,7 +694,7 @@ export default function Page() {
                           <div className="flex items-center space-x-2">
                             <div className={`px-2 py-1 rounded-full text-xs ${
                               model.size_gb && model.size_gb > 0
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
                                 : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
                             }`}>
                             {model.size_gb && model.size_gb > 0 ? 'Available' : 'Download'}
