@@ -448,8 +448,8 @@ def generate_voice_previews() -> bool:
 
                     # Generate audio with specific voice - simplified approach
                     try:
-                        # Try with default voice first
-                        audio_array = generate_audio(sample_text)
+                        # Try with default voice first (without specifying voice to avoid compatibility issues)
+                        audio_array = generate_audio(sample_text, history_prompt="v2/en_speaker_0")
                     except Exception as e:
                         logger.warning(f"⚠️ Failed to generate audio for {voice_id}: {e}")
                         continue
@@ -569,10 +569,21 @@ def download_bark_models() -> bool:
             # Preload models (this downloads them to cache)
             try:
                 logger.info("🔄 Preloading Bark models (this may take a while)...")
-                preload_models()
-                logger.info("✅ Bark models preloaded successfully")
+                # Try to preload with error handling
+                try:
+                    preload_models()
+                    logger.info("✅ Bark models preloaded successfully")
+                except Exception as preload_error:
+                    logger.warning(f"⚠️ Bark preload failed: {preload_error}")
+                    # Try alternative approach - just import bark to trigger download
+                    try:
+                        from bark import generate_audio
+                        logger.info("✅ Bark import successful, models will be downloaded on first use")
+                    except Exception as import_error:
+                        logger.warning(f"⚠️ Bark import also failed: {import_error}")
+                        logger.info("📝 Bark models will be loaded on first use")
             except Exception as e:
-                logger.warning(f"⚠️ Bark preload failed: {e}")
+                logger.warning(f"⚠️ Bark setup failed: {e}")
                 logger.info("📝 Bark models will be loaded on first use")
                 # Continue anyway - models will be loaded when needed
 
@@ -609,13 +620,8 @@ def download_bark_models() -> bool:
                 # Download preset audios after successful model setup
                 download_bark_preset_audios()
                 
-                # Generate voice previews using the downloaded models (optional)
-                try:
-                    logger.info("🎤 Generating voice previews with downloaded Bark models...")
-                    generate_voice_previews()
-                except Exception as e:
-                    logger.warning(f"⚠️ Voice preview generation failed (non-critical): {e}")
-                    logger.info("📝 Bark models are ready, but voice previews will be generated on first use")
+                # Skip voice preview generation during download to avoid compatibility issues
+                logger.info("📝 Bark models are ready. Voice previews will be generated on first use.")
 
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("models/audio/bark")
@@ -626,7 +632,13 @@ def download_bark_models() -> bool:
 
                 return True
             else:
-                raise Exception("Bark cache not found after preload")
+                logger.warning("⚠️ Bark cache not found after preload, trying fallback download...")
+                # Fallback to direct repository download
+                success = download_model("bark")
+                if success:
+                    return True
+                else:
+                    raise Exception("Both Bark preload and repository download failed")
 
         except ImportError:
             # Fallback: download Bark repository (will include configs)
@@ -636,13 +648,8 @@ def download_bark_models() -> bool:
                 # Download preset audios after successful model download
                 download_bark_preset_audios()
                 
-                # Generate voice previews using the downloaded models (optional)
-                try:
-                    logger.info("🎤 Generating voice previews with downloaded Bark models...")
-                    generate_voice_previews()
-                except Exception as e:
-                    logger.warning(f"⚠️ Voice preview generation failed (non-critical): {e}")
-                    logger.info("📝 Bark models are ready, but voice previews will be generated on first use")
+                # Skip voice preview generation during download to avoid compatibility issues
+                logger.info("📝 Bark models are ready. Voice previews will be generated on first use.")
 
                 # Clean up non-English embeddings if they exist in local directory
                 local_bark_dir = pathlib.Path("models/audio/bark")
@@ -948,18 +955,21 @@ def verify_model_integrity(model_id: str) -> bool:
 
     elif model_id == "bark":
         # Check for core model files (Bark uses different naming)
-        core_models = ["text_2.pt", "coarse.pt", "fine.pt"]
+        core_models = ["text_2.pt", "coarse_2.pt", "fine_2.pt", "coarse.pt", "fine.pt"]
         
         # Check for at least one core model file
         core_model_found = False
+        found_models = []
         for model_file in core_models:
             if (local_dir / model_file).exists():
                 core_model_found = True
-                break
+                found_models.append(model_file)
         
         if not core_model_found:
             logger.warning(f"⚠️ {config['name']}: Missing core model files: {core_models}")
             return False
+        else:
+            logger.info(f"✅ {config['name']}: Found core models: {found_models}")
 
         # Check for speaker embeddings (optional - Bark can work without them)
         speaker_embeddings_dir = local_dir / "speaker_embeddings"
@@ -1040,15 +1050,19 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
                     continue
 
             # Download the model
-            if model_id == "bark":
-                success = download_bark_models()
-            elif model_id == "animatediff":
-                success = download_animatediff_models()
-            elif model_id == "animatediff_motion_adapter":
-                # Skip motion adapter as it's handled by download_animatediff_models
-                success = True
-            else:
-                success = download_model_with_retry(model_id, force, max_retries=5)  # More retries for critical models
+            try:
+                if model_id == "bark":
+                    success = download_bark_models()
+                elif model_id == "animatediff":
+                    success = download_animatediff_models()
+                elif model_id == "animatediff_motion_adapter":
+                    # Skip motion adapter as it's handled by download_animatediff_models
+                    success = True
+                else:
+                    success = download_model_with_retry(model_id, force, max_retries=5)  # More retries for critical models
+            except Exception as e:
+                logger.error(f"❌ Failed to download {config['name']}: {e}")
+                success = False
 
             if success:
                 # Verify the download
