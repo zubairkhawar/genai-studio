@@ -21,6 +21,7 @@ class VideoGenerator:
         self.models = {}
         self.available_models = {
             "animatediff": {
+                "id": "animatediff",
                 "name": "AnimateDiff",
                 "description": "Perfect for GIF generation - creates short, looping animations from text",
                 "max_duration": 2,
@@ -36,6 +37,7 @@ class VideoGenerator:
                 ]
             },
             "stable-diffusion": {
+                "id": "stable-diffusion",
                 "name": "Stable Diffusion",
                 "description": "Text-to-image model used for video generation pipeline",
                 "max_duration": 0,
@@ -107,7 +109,8 @@ class VideoGenerator:
                     
                     # Try to load from local directory first
                     sd_path = "../models/image/stable-diffusion"
-                    success = await sd_generator.load_model(sd_path)
+                    # load_model is synchronous; run it in a thread to avoid blocking
+                    success = await asyncio.to_thread(sd_generator.load_model, sd_path)
                     
                     if success:
                         print("✅ Successfully loaded Stable Diffusion")
@@ -396,28 +399,87 @@ class VideoGenerator:
                 generator = pipe.get("generator_instance")
                 if generator:
                     print("Using AnimateDiff for generation")
-                    
+
+                    # 1) Ensure Stable Diffusion is loaded and generate a 768x768 keyframe
                     if progress_callback:
-                        progress_callback(25, "Generating GIF with AnimateDiff...")
-                    
-                    # Prepare generation parameters
+                        progress_callback(15, "Generating keyframe image (SD 768x768)...")
+
+                    if "stable-diffusion" not in self.models:
+                        await self.load_model("stable-diffusion")
+
+                    sd_pipe = self.models.get("stable-diffusion")
+                    if not sd_pipe or not sd_pipe.get("generator"):
+                        raise RuntimeError("Stable Diffusion not loaded for keyframe generation")
+
+                    sd_generator = sd_pipe["generator_instance"]
+
+                    keyframe_width = 768
+                    keyframe_height = 768
+                    keyframe_steps = kwargs.get("num_inference_steps", 20)
+                    keyframe_guidance = kwargs.get("guidance_scale", 7.5)
+
+                    try:
+                        keyframe = await asyncio.to_thread(
+                            sd_generator.generate_image,
+                            prompt=prompt,
+                            width=keyframe_width,
+                            height=keyframe_height,
+                            num_inference_steps=keyframe_steps,
+                            guidance_scale=keyframe_guidance
+                        )
+                    except Exception:
+                        # Fallback to 512x512 if 768x768 exhausts memory or fails
+                        if progress_callback:
+                            progress_callback(20, "768x768 keyframe failed, retrying at 512x512...")
+                        keyframe_width = 512
+                        keyframe_height = 512
+                        keyframe = await asyncio.to_thread(
+                            sd_generator.generate_image,
+                            prompt=prompt,
+                            width=keyframe_width,
+                            height=keyframe_height,
+                            num_inference_steps=keyframe_steps,
+                            guidance_scale=keyframe_guidance
+                        )
+
+                    # 2) Generate motion frames with AnimateDiff (downscale to 320x320 for memory)
+                    if progress_callback:
+                        progress_callback(40, "Generating video frames with AnimateDiff...")
+
+                    # Prepare generation parameters for AnimateDiff
                     generation_params = {
                         "prompt": prompt,
+                        "width": 320,
+                        "height": 320,
                         "progress_callback": progress_callback
                     }
-                    
-                    # Use custom parameters if provided, otherwise use defaults
-                    if "num_frames" in kwargs:
-                        generation_params["num_frames"] = kwargs["num_frames"]
-                    else:
-                        generation_params["num_frames"] = min(duration * 8, 16)  # 8 fps, max 16 frames
-                    
+
+                    # Frame count defaults: 8 fps, bound by duration
+                    generation_params["num_frames"] = min(max(duration * 8, 6), 24)
+
                     # Add other advanced parameters if provided
-                    for param in ["width", "height", "num_inference_steps", "guidance_scale", "motion_scale", "seed"]:
+                    for param in ["num_inference_steps", "guidance_scale", "motion_scale", "seed"]:
                         if param in kwargs:
                             generation_params[param] = kwargs[param]
-                    
+
+                    # Pass through output format to downstream save
+                    generation_params["output_format"] = output_format
+
                     output_path = await generator.generate_video(**generation_params)
+                    
+                    # 3) Post-upscale to 640x640 for better viewing quality when running AD at 320x320
+                    try:
+                        if isinstance(output_path, str) and output_format.lower() != "gif":
+                            upscaled_path = await asyncio.to_thread(
+                                self._upscale_video_ffmpeg,
+                                input_path=output_path,
+                                target_width=640,
+                                target_height=640
+                            )
+                            return upscaled_path
+                    except Exception as _:
+                        # If upscale fails, fall back to original
+                        pass
                     
                     return output_path
                 else:
@@ -591,22 +653,81 @@ class VideoGenerator:
             # Get video dimensions
             height, width, channels = frame_arrays[0].shape
             
-            # Create video writer
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, 6.0, (width, height))
-            
-            # Write frames
-            for frame_array in frame_arrays:
-                # Convert RGB to BGR for OpenCV
-                frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
-                out.write(frame_bgr)
-            
-            out.release()
+            # Choose appropriate codec based on output format
+            if output_format.lower() == 'gif':
+                # For GIF, we need to use a different approach since OpenCV doesn't handle GIF well
+                # Save as individual frames and use PIL to create GIF
+                return await self._save_frames_as_gif(frames, output_path)
+            else:
+                # For other formats (mp4, avi, etc.), use OpenCV with appropriate codec
+                if output_format.lower() == 'mp4':
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                elif output_format.lower() == 'avi':
+                    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                else:
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Default to mp4v
+                
+                out = cv2.VideoWriter(output_path, fourcc, 6.0, (width, height))
+                
+                # Write frames
+                for frame_array in frame_arrays:
+                    # Convert RGB to BGR for OpenCV
+                    frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+                    out.write(frame_bgr)
+                
+                out.release()
             
             return output_path
             
         except Exception as e:
             raise RuntimeError(f"Failed to save video: {e}")
+
+    def _upscale_video_ffmpeg(self, input_path: str, target_width: int, target_height: int) -> str:
+        """Upscale a video using FFmpeg bicubic scaling and faststart for web playback"""
+        try:
+            import subprocess
+            from pathlib import Path
+            in_path = Path(input_path)
+            out_path = in_path.with_name(in_path.stem + f"_{target_width}x{target_height}" + in_path.suffix)
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", str(in_path),
+                "-vf", f"scale={target_width}:{target_height}:flags=bicubic",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-crf", "20",
+                "-preset", "medium",
+                "-movflags", "+faststart",
+                str(out_path)
+            ]
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            return str(out_path)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"FFmpeg upscale failed: {e.stderr}")
+    
+    async def _save_frames_as_gif(self, frames: List[Image.Image], output_path: str) -> str:
+        """Save frames as GIF using PIL"""
+        try:
+            # Ensure we have frames
+            if not frames:
+                raise ValueError("No frames to save")
+            
+            # Save the first frame
+            frames[0].save(
+                output_path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=166,  # ~6 FPS (1000ms / 6 = 166ms per frame)
+                loop=0,  # Infinite loop
+                optimize=True
+            )
+            
+            print(f"✅ GIF saved to: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            raise RuntimeError(f"Failed to save GIF: {e}")
     
     def unload_model(self, model_name: str) -> bool:
         """Unload a model to free memory"""

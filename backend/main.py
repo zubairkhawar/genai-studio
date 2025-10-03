@@ -610,6 +610,18 @@ async def serve_video_file(filename: str, request: Request):
         if not file_path.exists() or not file_path.is_file():
             raise HTTPException(status_code=404, detail="Video file not found")
         # Handle HTTP Range requests for streaming
+        # Determine media type based on extension
+        lower_name = filename.lower()
+        media_type = "video/mp4"
+        if lower_name.endswith(".gif"):
+            media_type = "image/gif"
+        elif lower_name.endswith(".webm"):
+            media_type = "video/webm"
+        elif lower_name.endswith(".mov"):
+            media_type = "video/quicktime"
+        elif lower_name.endswith(".avi"):
+            media_type = "video/x-msvideo"
+
         range_header = request.headers.get("range")
         if range_header:
             # Parse: bytes=start-end
@@ -638,14 +650,14 @@ async def serve_video_file(filename: str, request: Request):
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
                     "Accept-Ranges": "bytes",
                     "Content-Length": str(chunk_size),
-                    "Content-Type": "video/mp4",
+                    "Content-Type": media_type,
                 }
                 return StreamingResponse(iter_file_range(file_path, start, end), status_code=206, headers=headers)
             except Exception:
                 # Fall through to full response
                 pass
 
-        return FileResponse(path=str(file_path), media_type="video/mp4", filename=filename)
+        return FileResponse(path=str(file_path), media_type=media_type, filename=filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -873,7 +885,7 @@ async def get_video_outputs():
         
         videos = []
         for file_path in videos_dir.iterdir():
-            if file_path.is_file() and file_path.suffix in ['.mp4', '.avi', '.mov', '.webm']:
+            if file_path.is_file() and file_path.suffix.lower() in ['.mp4', '.avi', '.mov', '.webm', '.gif']:
                 videos.append({
                     "filename": file_path.name,
                     "path": f"/outputs/videos/{file_path.name}",
@@ -929,7 +941,8 @@ async def get_image_outputs():
                 continue
                 
             for file_path in output_dir.iterdir():
-                if file_path.is_file() and file_path.suffix in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
+                # Treat GIFs as videos, not images
+                if file_path.is_file() and file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.webp']:
                     # Determine the correct path for serving
                     if output_dir.name == 'outputs':
                         path = f"/outputs/{file_path.name}"
@@ -1220,45 +1233,93 @@ async def download_models_stream(force: bool = False, retries: int = 5):
 @app.delete("/delete-model/{model_name}")
 async def delete_model(model_name: str):
     """Delete a specific model"""
+    import shutil
+    from fastapi import HTTPException as _HTTPException
     try:
-        import shutil
-        
         # Define model paths
         model_paths = {
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
             "animatediff": pathlib.Path("../models/video/animatediff"),
+            # Bark stores in cache; also keep a local mirror under ../models/audio/bark
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
         }
-        
+        # Map API names to unified download status keys
+        name_to_status_key = {
+            "stable-diffusion": "stable_diffusion",
+            "animatediff": "animatediff",
+            "bark": "bark",
+        }
+
         if model_name not in model_paths:
+            # Return a proper 400 for unknown/undefined names
             raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
-        
+
         model_path = model_paths[model_name]
-        
-        if not model_path.exists():
-            return {"message": f"Model {model_name} not found", "deleted": False}
-        
-        # Calculate size before deletion
-        total_size = 0
-        if model_path.is_dir():
-            for file_path in model_path.rglob('*'):
-                if file_path.is_file():
-                    total_size += file_path.stat().st_size
-        
-        size_gb = total_size / (1024**3)
-        
-        # Delete the model
-        if model_path.is_dir():
-            shutil.rmtree(model_path)
+
+        # Special handling for Bark: delete both cache and local mirror
+        deleted_any = False
+        if model_name == "bark":
+            bark_cache = model_path
+            bark_local = pathlib.Path("../models/audio/bark")
+            # Delete cache dir
+            if bark_cache.exists():
+                if bark_cache.is_dir():
+                    shutil.rmtree(bark_cache)
+                else:
+                    bark_cache.unlink()
+                deleted_any = True
+            # Delete local mirror dir
+            if bark_local.exists():
+                shutil.rmtree(bark_local)
+                deleted_any = True
+            if not deleted_any:
+                return {"message": "Bark not found", "deleted": False}
+            # For size freed, we cannot easily compute both after deletion; report 0 and rely on /settings storage
+            size_gb = 0
         else:
-            model_path.unlink()
-        
+            if not model_path.exists():
+                return {"message": f"Model {model_name} not found", "deleted": False}
+            
+            # Calculate size before deletion
+            total_size = 0
+            if model_path.is_dir():
+                for file_path in model_path.rglob('*'):
+                    if file_path.is_file():
+                        total_size += file_path.stat().st_size
+
+            size_gb = total_size / (1024**3)
+
+            # Delete the model
+            if model_path.is_dir():
+                shutil.rmtree(model_path)
+            else:
+                model_path.unlink()
+
+        # Update unified download status for the deleted model
+        try:
+            status_key = name_to_status_key.get(model_name, model_name)
+            if status_key in download_status.get("models", {}):
+                download_status["models"][status_key].update({
+                    "status": "pending",
+                    "progress": 0,
+                    "downloaded_mb": 0,
+                    "files_verified": False
+                })
+                # Recompute overall progress
+                completed_models = sum(1 for m in download_status["models"].values() if m.get("status") == "done")
+                total_models = len(download_status["models"]) or 1
+                download_status["overall_progress"] = int((completed_models / total_models) * 100)
+        except Exception:
+            pass
+
         return {
             "message": f"Model {model_name} deleted successfully",
             "deleted": True,
             "size_freed_gb": round(size_gb, 2)
         }
-        
+    except _HTTPException as http_err:
+        # Preserve intended HTTP status codes (e.g., 400 Unknown model)
+        raise http_err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete model {model_name}: {str(e)}")
 
