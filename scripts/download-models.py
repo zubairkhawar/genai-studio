@@ -497,6 +497,58 @@ def generate_voice_previews() -> bool:
         logger.info(" Voice previews are optional and will be generated later if needed")
         return False
 
+def download_additional_bark_components(local_bark_dir: pathlib.Path) -> bool:
+    """Download additional Bark components that might be missing"""
+    try:
+        logger.info("🔧 Checking for additional Bark components...")
+        
+        # List of additional Bark components that might be needed
+        additional_components = [
+            "config.json",
+            "tokenizer.json", 
+            "tokenizer_config.json",
+            "vocab.txt",
+            "coarse_2.pt",
+            "fine_2.pt"
+        ]
+        
+        missing_components = []
+        for component in additional_components:
+            if not (local_bark_dir / component).exists():
+                missing_components.append(component)
+        
+        if missing_components:
+            logger.info(f"📥 Downloading missing Bark components: {missing_components}")
+            
+            # Try to download from Hugging Face
+            try:
+                from huggingface_hub import hf_hub_download
+                
+                for component in missing_components:
+                    try:
+                        logger.info(f"📥 Downloading {component}...")
+                        # Download from the official Bark repository
+                        downloaded_path = hf_hub_download(
+                            repo_id="suno/bark",
+                            filename=component,
+                            local_dir=str(local_bark_dir),
+                            local_dir_use_symlinks=False
+                        )
+                        logger.info(f"✅ Downloaded {component}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to download {component}: {e}")
+                        
+            except ImportError:
+                logger.warning("⚠️ huggingface_hub not available for downloading additional components")
+        else:
+            logger.info("✅ All Bark components are present")
+            
+        return True
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Error downloading additional Bark components: {e}")
+        return False
+
 def download_bark_models() -> bool:
     """Special handling for Bark models"""
     try:
@@ -516,7 +568,9 @@ def download_bark_models() -> bool:
 
             # Preload models (this downloads them to cache)
             try:
+                logger.info("🔄 Preloading Bark models (this may take a while)...")
                 preload_models()
+                logger.info("✅ Bark models preloaded successfully")
             except Exception as e:
                 logger.warning(f"⚠️ Bark preload failed: {e}")
                 logger.info("📝 Bark models will be loaded on first use")
@@ -548,6 +602,9 @@ def download_bark_models() -> bool:
                         logger.info(f"📄 Copied: {relative_path}")
                 
                 logger.info(f"✅ Bark models copied to local directory ({copied_files} files)")
+
+                # Download additional Bark components if missing
+                download_additional_bark_components(local_bark_dir)
 
                 # Download preset audios after successful model setup
                 download_bark_preset_audios()
