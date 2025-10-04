@@ -39,14 +39,26 @@ class ImageGenerator:
         # Initialize default model
         try:
             # Check if models exist locally before attempting to load
-            sd_path = pathlib.Path("../models/image/stable-diffusion")
+            sd_path = pathlib.Path("models/image/stable-diffusion")
             
             if sd_path.exists():
-                print("Local Stable Diffusion model found...")
+                # Check if it's a complete model
+                required_files = ["model_index.json", "v1-inference.yaml"]
+                required_dirs = ["text_encoder", "unet", "vae", "scheduler", "tokenizer"]
+                weight_files = list(sd_path.rglob("*.safetensors")) + list(sd_path.rglob("*.ckpt"))
+                
+                has_files = all((sd_path / f).exists() for f in required_files)
+                has_dirs = all((sd_path / d).exists() for d in required_dirs)
+                has_weights = len(weight_files) > 0
+                
+                if has_files and has_dirs and has_weights:
+                    print("Local Stable Diffusion model found...")
+                else:
+                    print("Stable Diffusion model directory exists but appears incomplete. Use 'Download Models' to download them first.")
             else:
                 print("No local models found. Use 'Download Models' to download them first.")
         except Exception as e:
-            print(f"Warning: Could not load default image model: {e}")
+            print(f"Warning: Could not check default image model: {e}")
     
     async def load_model(self, model_name: str) -> bool:
         """Load a specific image model"""
@@ -234,16 +246,20 @@ class ImageGenerator:
             
             # Check if model is actually downloaded
             if model_id == "stable-diffusion":
-                sd_path = pathlib.Path("../models/image/stable-diffusion")
+                sd_path = pathlib.Path("models/image/stable-diffusion")
                 if sd_path.exists():
-                    # Check for essential files
-                    required_files = ["config.json", "model_index.json", "v1-inference.yaml"]
+                    # Check for essential files and directories
+                    required_files = ["model_index.json", "v1-inference.yaml"]
                     required_dirs = ["text_encoder", "unet", "vae", "scheduler", "tokenizer"]
+                    
+                    # Check if we have weight files (the main indicator of a complete model)
+                    weight_files = list(sd_path.rglob("*.safetensors")) + list(sd_path.rglob("*.ckpt"))
                     
                     has_files = all((sd_path / f).exists() for f in required_files)
                     has_dirs = all((sd_path / d).exists() for d in required_dirs)
+                    has_weights = len(weight_files) > 0
                     
-                    if has_files and has_dirs:
+                    if has_files and has_dirs and has_weights:
                         model_status["status"] = "available"
                         model_status["size_gb"] = self._get_model_size(sd_path)
                     else:

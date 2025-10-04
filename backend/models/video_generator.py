@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 import tempfile
 import shutil
 from .animatediff_generator import AnimateDiffGenerator
+from .enhanced_video_generator import EnhancedVideoGenerator
 
 class VideoGenerator:
     """Text-to-video generation using various models"""
@@ -36,6 +37,36 @@ class VideoGenerator:
                     "M1 compatible"
                 ]
             },
+            "realesrgan": {
+                "id": "realesrgan",
+                "name": "RealESRGAN",
+                "description": "Spatial Super-Resolution (SSR) - upscales and enhances video frame quality",
+                "max_duration": 0,
+                "resolution": "4x upscaling",
+                "type": "upscaling",
+                "workflow": True,
+                "features": [
+                    "4x upscaling",
+                    "Noise reduction",
+                    "Edge sharpening",
+                    "Quality enhancement"
+                ]
+            },
+            "film": {
+                "id": "film",
+                "name": "FILM Frame Interpolation",
+                "description": "Temporal Super-Resolution (TSR) - Google's frame interpolation for smooth motion",
+                "max_duration": 0,
+                "resolution": "FPS enhancement",
+                "type": "interpolation",
+                "workflow": True,
+                "features": [
+                    "Frame interpolation",
+                    "Motion smoothing",
+                    "FPS enhancement",
+                    "Large motion handling"
+                ]
+            },
             "stable-diffusion": {
                 "id": "stable-diffusion",
                 "name": "Stable Diffusion",
@@ -56,7 +87,7 @@ class VideoGenerator:
         """Load default models - only called when explicitly requested"""
         try:
             # Check if models exist locally before attempting to load
-            sd_path = pathlib.Path("../models/image/stable-diffusion")
+            sd_path = pathlib.Path("models/image/stable-diffusion")
             
             if sd_path.exists():
                 print("Local Stable Diffusion model found...")
@@ -96,6 +127,26 @@ class VideoGenerator:
                     pipe = {"placeholder": True, "name": "animatediff"}
                     
                     
+            elif model_name == "enhanced-pipeline":
+                # Initialize Enhanced Video Pipeline
+                try:
+                    print(f"Loading Enhanced Video Pipeline...")
+                    enhanced_generator = EnhancedVideoGenerator(gpu_info=self.gpu_info)
+                    
+                    # Load all models for the enhanced pipeline
+                    success = await enhanced_generator.load_models()
+                    
+                    if success:
+                        print("✅ Successfully loaded Enhanced Video Pipeline")
+                        pipe = {"generator": True, "name": "enhanced-pipeline", "generator_instance": enhanced_generator}
+                    else:
+                        print("❌ Failed to load Enhanced Video Pipeline, using placeholder")
+                        pipe = {"placeholder": True, "name": "enhanced-pipeline"}
+                        
+                except Exception as e:
+                    print(f"Could not load Enhanced Video Pipeline: {e}")
+                    pipe = {"placeholder": True, "name": "enhanced-pipeline"}
+                    
             elif model_name == "stable-diffusion":
                 # Initialize Stable Diffusion text-to-image generator
                 try:
@@ -108,7 +159,7 @@ class VideoGenerator:
                     )
                     
                     # Try to load from local directory first
-                    sd_path = "../models/image/stable-diffusion"
+                    sd_path = "models/image/stable-diffusion"
                     # load_model is synchronous; run it in a thread to avoid blocking
                     success = await asyncio.to_thread(sd_generator.load_model, sd_path)
                     
@@ -125,7 +176,7 @@ class VideoGenerator:
                     
                 
             else:
-                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, stable-diffusion")
+                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, enhanced-pipeline, stable-diffusion")
             
             self.models[model_name] = pipe
             print(f"Successfully loaded model: {model_name}")
@@ -146,15 +197,30 @@ class VideoGenerator:
             # Check if model files exist on disk
             if model_id == "animatediff":
                 # AnimateDiff has its own motion adapter files
-                model_path = pathlib.Path(f"../models/video/animatediff")
+                model_path = pathlib.Path(f"models/video/animatediff")
+            elif model_id == "realesrgan":
+                # RealESRGAN models are in upscaling directory
+                model_path = pathlib.Path(f"models/upscaling/realesrgan")
+            elif model_id == "film":
+                # FILM models are in interpolation directory
+                model_path = pathlib.Path(f"models/interpolation/film")
             else:
-                model_path = pathlib.Path(f"../models/video/{model_id}")
+                model_path = pathlib.Path(f"models/video/{model_id}")
             
             # Always include the model, but check if it's downloaded
             size_gb = 0
             if model_path.exists():
                 # Check for actual model weight files (not just config files)
-                weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
+                if model_id == "realesrgan":
+                    # RealESRGAN uses .pth files
+                    weight_files = list(model_path.rglob("*.pth"))
+                elif model_id == "film":
+                    # FILM uses Python files and doesn't need weight files (uses TensorFlow Hub)
+                    weight_files = list(model_path.rglob("*.py"))
+                else:
+                    # Standard model files
+                    weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
+                
                 if len(weight_files) > 0:
                     # Calculate total model size
                     total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
@@ -184,17 +250,63 @@ class VideoGenerator:
                 raise RuntimeError(f"Could not load model: {model_name}")
             
             # Generate video using the appropriate method
-            if model_name == "animatediff":
+            if model_name == "enhanced-pipeline":
+                return await self._generate_with_enhanced_pipeline(prompt, duration, output_format, progress_callback, **kwargs)
+            elif model_name == "animatediff":
                 return await self._generate_with_animatediff(prompt, duration, output_format, progress_callback, **kwargs)
             elif model_name == "stable-diffusion":
                 return await self._generate_with_stable_diffusion(prompt, duration, output_format, progress_callback, **kwargs)
             elif model_name == "stable-video-diffusion":
                 return await self._generate_with_pipeline(prompt, duration, output_format, image_input, progress_callback, **kwargs)
             else:
-                raise ValueError(f"Unsupported model: {model_name}. Supported models: animatediff, stable-diffusion, stable-video-diffusion")
+                raise ValueError(f"Unsupported model: {model_name}. Supported models: enhanced-pipeline, animatediff, stable-diffusion, stable-video-diffusion")
                 
         except Exception as e:
             raise RuntimeError(f"Video generation failed: {e}")
+    
+    async def _generate_with_enhanced_pipeline(self, prompt: str, duration: int, output_format: str, 
+                                             progress_callback: Optional[callable] = None, **kwargs) -> str:
+        """Generate video using the enhanced pipeline"""
+        try:
+            pipe = self.models["enhanced-pipeline"]
+            
+            # Check if this is a placeholder model
+            if isinstance(pipe, dict) and pipe.get("placeholder"):
+                print("Using placeholder for Enhanced Pipeline generation")
+                return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+            
+            # Check if this is a generator model
+            if isinstance(pipe, dict) and pipe.get("generator"):
+                generator = pipe.get("generator_instance")
+                if generator:
+                    print("Using Enhanced Pipeline for generation")
+                    
+                    # Set target FPS based on duration and format
+                    target_fps = kwargs.get("target_fps", 24)
+                    if output_format.lower() == "gif":
+                        target_fps = min(target_fps, 12)  # Limit GIF FPS for file size
+                    
+                    # Generate enhanced video
+                    output_path = await generator.generate_enhanced_video(
+                        prompt=prompt,
+                        negative_prompt=kwargs.get("negative_prompt"),
+                        duration=duration,
+                        target_fps=target_fps,
+                        progress_callback=progress_callback,
+                        **kwargs
+                    )
+                    
+                    return output_path
+                else:
+                    print("Enhanced Pipeline generator instance not available, using placeholder")
+                    return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+            
+            # Fallback to placeholder
+            print("Using placeholder for Enhanced Pipeline generation")
+            return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+            
+        except Exception as e:
+            raise RuntimeError(f"Enhanced Pipeline generation failed: {e}")
     
     async def generate_video_improved(self, prompt: str,
                            num_frames: int = 16,

@@ -63,6 +63,37 @@ MODELS = {
         "size_gb": 5.0,
         "priority": 2,  # High priority - primary TTS model
         "description": "Text-to-speech generation"
+    },
+    "realesrgan": {
+        "name": "RealESRGAN Models",
+        "repo_id": "github/xinntao/Real-ESRGAN",
+        "local_dir": str(config.get_model_path("upscaling", "realesrgan")),
+        "size_gb": 0.2,  # ~200MB for models
+        "priority": 4,
+        "description": "RealESRGAN models for spatial super-resolution",
+        "download_type": "direct_models",
+        "models": [
+            {
+                "name": "RealESRGAN_x4plus.pth",
+                "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+                "description": "General purpose 4x upscaling model"
+            },
+            {
+                "name": "RealESRGAN_x4plus_anime_6B.pth",
+                "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
+                "description": "Anime-focused 4x upscaling model"
+            }
+        ]
+    },
+    "film": {
+        "name": "FILM Frame Interpolation",
+        "repo_id": "github/google-research/frame-interpolation",
+        "local_dir": str(config.get_model_path("interpolation", "film")),
+        "size_gb": 0.3,  # ~300MB for complete repo
+        "priority": 5,
+        "description": "Google FILM for frame interpolation",
+        "download_type": "git_clone",
+        "git_url": "https://github.com/google-research/frame-interpolation.git"
     }
 }
 
@@ -99,6 +130,359 @@ def check_network_connectivity() -> bool:
     except Exception:
         return False
 
+def download_direct_url_model(model_id: str, force: bool = False, max_retries: int = 3) -> bool:
+    """Download a model from direct URL (for RealESRGAN, RIFE, etc.)"""
+    if model_id not in MODELS:
+        logger.error(f"Unknown model: {model_id}")
+        return False
+
+    config = MODELS[model_id]
+    local_dir = pathlib.Path(config["local_dir"])
+    download_url = config.get("download_url")
+    
+    if not download_url:
+        logger.error(f"No download URL specified for {model_id}")
+        return False
+
+    # Determine filename from URL
+    filename = download_url.split("/")[-1]
+    file_path = local_dir / filename
+
+    # Skip if already downloaded unless force
+    if not force and file_path.exists() and file_path.stat().st_size > 0:
+        logger.info(f"⏭️ Skipping {config['name']} - already downloaded")
+        return True
+
+    # Check network connectivity first
+    if not check_network_connectivity():
+        logger.warning("⚠️ Network connectivity issues detected. Will retry with longer timeouts...")
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                wait_time = 2 ** attempt  # Exponential backoff
+                logger.info(f"🔄 Retry attempt {attempt + 1}/{max_retries} after {wait_time}s...")
+                time.sleep(wait_time)
+
+            logger.info(f"📥 Downloading {config['name']}...")
+            logger.info(f" URL: {download_url}")
+            logger.info(f" Local path: {file_path}")
+            logger.info(f" Size: ~{config['size_gb']}GB")
+            logger.info(f" Attempt: {attempt + 1}/{max_retries}")
+
+            # Ensure directory
+            local_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download with progress bar
+            response = requests.get(download_url, stream=True, timeout=60)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            
+            with open(file_path, 'wb') as f:
+                downloaded = 0
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = (downloaded / total_size) * 100
+                            if downloaded % (1024 * 1024) == 0:  # Log every MB
+                                logger.info(f"📊 Downloaded {downloaded / (1024*1024):.1f}MB / {total_size / (1024*1024):.1f}MB ({percent:.1f}%)")
+
+            # Verify download
+            if file_path.exists() and file_path.stat().st_size > 0:
+                size_mb = file_path.stat().st_size / (1024 * 1024)
+                logger.info(f"✅ Successfully downloaded {config['name']} ({size_mb:.2f} MB)")
+                
+                # Extract if it's a zip file
+                if filename.endswith('.zip'):
+                    logger.info("📦 Extracting zip file...")
+                    import zipfile
+                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                        zip_ref.extractall(local_dir)
+                    logger.info("✅ Extraction completed")
+                
+                return True
+            else:
+                raise Exception("Downloaded file is empty or doesn't exist")
+
+        except Exception as e:
+            logger.error(f"❌ Attempt {attempt + 1} failed for {config['name']}: {e}")
+            if attempt == max_retries - 1:
+                logger.error(f"💥 All {max_retries} attempts failed for {config['name']}")
+                return False
+            else:
+                logger.info(f"🔄 Will retry in {2 ** (attempt + 1)} seconds...")
+
+    return False
+
+def download_huggingface_with_patterns(model_id: str, force: bool = False, max_retries: int = 3) -> bool:
+    """Download a Hugging Face repository with specific file patterns"""
+    if model_id not in MODELS:
+        logger.error(f"Unknown model: {model_id}")
+        return False
+
+    config = MODELS[model_id]
+    local_dir = pathlib.Path(config["local_dir"])
+    repo_id = config["repo_id"]
+    include_patterns = config.get("include_patterns", ["*"])
+
+    # Skip if already downloaded unless force
+    if not force and local_dir.exists():
+        # Check for essential files based on patterns
+        essential_files = []
+        for pattern in include_patterns:
+            essential_files.extend(list(local_dir.rglob(pattern)))
+        
+        if len(essential_files) > 0:
+            logger.info(f"⏭️ Skipping {config['name']} - already downloaded")
+            return True
+
+    # Check network connectivity first
+    if not check_network_connectivity():
+        logger.warning("⚠️ Network connectivity issues detected. Will retry with longer timeouts...")
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                wait_time = 2 ** attempt  # Exponential backoff
+                logger.info(f"🔄 Retry attempt {attempt + 1}/{max_retries} after {wait_time}s...")
+                time.sleep(wait_time)
+
+            logger.info(f"📥 Downloading {config['name']}...")
+            logger.info(f" Repository: {repo_id}")
+            logger.info(f" Local path: {local_dir}")
+            logger.info(f" Size: ~{config['size_gb']}GB")
+            logger.info(f" Patterns: {include_patterns}")
+            logger.info(f" Attempt: {attempt + 1}/{max_retries}")
+
+            # Ensure directory
+            local_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download with pattern filtering
+            snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(local_dir),
+                allow_patterns=include_patterns,
+                force_download=bool(force),
+                max_workers=1,
+                tqdm_class=None,
+                local_files_only=False,
+                token=None,
+            )
+
+            # Verify download by checking for essential files
+            downloaded_files = []
+            for pattern in include_patterns:
+                downloaded_files.extend(list(local_dir.rglob(pattern)))
+            
+            if len(downloaded_files) == 0:
+                raise Exception(f"No files matching patterns {include_patterns} found after download")
+
+            # Log downloaded files
+            total_size = sum(f.stat().st_size for f in downloaded_files if f.is_file())
+            size_mb = total_size / (1024 * 1024)
+            logger.info(f"✅ Successfully downloaded {config['name']} ({len(downloaded_files)} files, {size_mb:.2f} MB)")
+
+            # Log some key files for verification
+            key_files = [f for f in downloaded_files if any(ext in f.name for ext in ['.pth', '.pkl', '.py', '.md'])]
+            if key_files:
+                logger.info(f"📁 Key files: {[f.name for f in key_files[:5]]}")  # Show first 5 key files
+
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Attempt {attempt + 1} failed for {config['name']}: {e}")
+            if attempt == max_retries - 1:
+                logger.error(f"💥 All {max_retries} attempts failed for {config['name']}")
+                return False
+            else:
+                logger.info(f"🔄 Will retry in {2 ** (attempt + 1)} seconds...")
+
+    return False
+
+def download_direct_models(model_id: str, force: bool = False, max_retries: int = 3) -> bool:
+    """Download multiple models from direct URLs"""
+    if model_id not in MODELS:
+        logger.error(f"Unknown model: {model_id}")
+        return False
+
+    config = MODELS[model_id]
+    local_dir = pathlib.Path(config["local_dir"])
+    models = config.get("models", [])
+
+    if not models:
+        logger.error(f"No models specified for {model_id}")
+        return False
+
+    # Check if all models are already downloaded unless force
+    if not force and local_dir.exists():
+        all_downloaded = True
+        for model_info in models:
+            model_path = local_dir / model_info["name"]
+            if not model_path.exists() or model_path.stat().st_size == 0:
+                all_downloaded = False
+                break
+        
+        if all_downloaded:
+            logger.info(f"⏭️ Skipping {config['name']} - all models already downloaded")
+            return True
+
+    # Check network connectivity first
+    if not check_network_connectivity():
+        logger.warning("⚠️ Network connectivity issues detected. Will retry with longer timeouts...")
+
+    # Ensure directory
+    local_dir.mkdir(parents=True, exist_ok=True)
+
+    downloaded_count = 0
+    total_models = len(models)
+
+    for model_info in models:
+        model_name = model_info["name"]
+        model_url = model_info["url"]
+        model_path = local_dir / model_name
+
+        # Skip if already downloaded unless force
+        if not force and model_path.exists() and model_path.stat().st_size > 0:
+            logger.info(f"⏭️ Skipping {model_name} - already downloaded")
+            downloaded_count += 1
+            continue
+
+        # Download with retry
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    wait_time = 2 ** attempt
+                    logger.info(f"🔄 Retry attempt {attempt + 1}/{max_retries} for {model_name} after {wait_time}s...")
+                    time.sleep(wait_time)
+
+                logger.info(f"📥 Downloading {model_name}...")
+                logger.info(f" URL: {model_url}")
+                logger.info(f" Local path: {model_path}")
+
+                # Download with progress
+                response = requests.get(model_url, stream=True, timeout=60)
+                response.raise_for_status()
+                
+                total_size = int(response.headers.get('content-length', 0))
+                
+                with open(model_path, 'wb') as f:
+                    downloaded = 0
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                percent = (downloaded / total_size) * 100
+                                if downloaded % (1024 * 1024) == 0:  # Log every MB
+                                    logger.info(f"📊 Downloaded {downloaded / (1024*1024):.1f}MB / {total_size / (1024*1024):.1f}MB ({percent:.1f}%)")
+
+                # Verify download
+                if model_path.exists() and model_path.stat().st_size > 0:
+                    size_mb = model_path.stat().st_size / (1024 * 1024)
+                    logger.info(f"✅ Successfully downloaded {model_name} ({size_mb:.2f} MB)")
+                    downloaded_count += 1
+                    break
+                else:
+                    raise Exception("Downloaded file is empty or doesn't exist")
+
+            except Exception as e:
+                logger.error(f"❌ Attempt {attempt + 1} failed for {model_name}: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"💥 All {max_retries} attempts failed for {model_name}")
+                    return False
+                else:
+                    logger.info(f"🔄 Will retry in {2 ** (attempt + 1)} seconds...")
+
+    if downloaded_count == total_models:
+        logger.info(f"✅ Successfully downloaded all {total_models} models for {config['name']}")
+        return True
+    else:
+        logger.error(f"❌ Only {downloaded_count}/{total_models} models downloaded for {config['name']}")
+        return False
+
+def download_git_clone(model_id: str, force: bool = False, max_retries: int = 3) -> bool:
+    """Download a repository using git clone"""
+    if model_id not in MODELS:
+        logger.error(f"Unknown model: {model_id}")
+        return False
+
+    config = MODELS[model_id]
+    local_dir = pathlib.Path(config["local_dir"])
+    git_url = config.get("git_url")
+
+    if not git_url:
+        logger.error(f"No git URL specified for {model_id}")
+        return False
+
+    # Skip if already downloaded unless force
+    if not force and local_dir.exists():
+        # Check if it's a valid git repository
+        git_dir = local_dir / ".git"
+        if git_dir.exists():
+            logger.info(f"⏭️ Skipping {config['name']} - already cloned")
+            return True
+
+    # Check network connectivity first
+    if not check_network_connectivity():
+        logger.warning("⚠️ Network connectivity issues detected. Will retry with longer timeouts...")
+
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                wait_time = 2 ** attempt
+                logger.info(f"🔄 Retry attempt {attempt + 1}/{max_retries} after {wait_time}s...")
+                time.sleep(wait_time)
+
+            logger.info(f"📥 Cloning {config['name']}...")
+            logger.info(f" Repository: {git_url}")
+            logger.info(f" Local path: {local_dir}")
+            logger.info(f" Size: ~{config['size_gb']}GB")
+            logger.info(f" Attempt: {attempt + 1}/{max_retries}")
+
+            # Remove existing directory if force
+            if force and local_dir.exists():
+                shutil.rmtree(local_dir)
+
+            # Ensure parent directory exists
+            local_dir.parent.mkdir(parents=True, exist_ok=True)
+
+            # Clone repository
+            import subprocess
+            result = subprocess.run(
+                ["git", "clone", "--depth", "1", git_url, str(local_dir)],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+
+            if result.returncode != 0:
+                raise Exception(f"Git clone failed: {result.stderr}")
+
+            # Verify clone by checking for key files
+            if not local_dir.exists():
+                raise Exception("Repository directory not created")
+
+            # Log some key files for verification
+            key_files = list(local_dir.rglob("*.py"))[:5]  # First 5 Python files
+            if key_files:
+                logger.info(f"📁 Key files: {[f.name for f in key_files]}")
+
+            logger.info(f"✅ Successfully cloned {config['name']}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Attempt {attempt + 1} failed for {config['name']}: {e}")
+            if attempt == max_retries - 1:
+                logger.error(f"💥 All {max_retries} attempts failed for {config['name']}")
+                return False
+            else:
+                logger.info(f"🔄 Will retry in {2 ** (attempt + 1)} seconds...")
+
+    return False
+
 def download_model_with_retry(model_id: str, force: bool = False, max_retries: int = 3) -> bool:
     """Download a specific model with retry logic and network resilience"""
     if model_id not in MODELS:
@@ -106,6 +490,23 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
         return False
 
     config = MODELS[model_id]
+    
+    # Check if this is a direct URL download
+    if config.get("download_type") == "direct_url":
+        return download_direct_url_model(model_id, force, max_retries)
+    
+    # Check if this is a Hugging Face download with patterns
+    if config.get("download_type") == "huggingface":
+        return download_huggingface_with_patterns(model_id, force, max_retries)
+    
+    # Check if this is a direct models download
+    if config.get("download_type") == "direct_models":
+        return download_direct_models(model_id, force, max_retries)
+    
+    # Check if this is a git clone download
+    if config.get("download_type") == "git_clone":
+        return download_git_clone(model_id, force, max_retries)
+    
     local_dir = pathlib.Path(config["local_dir"])
 
     # Skip if already downloaded (weights exist) unless force
@@ -1016,8 +1417,74 @@ def verify_model_integrity(model_id: str) -> bool:
 
         # Bark verification passed - core model found and preset audios available
 
-    # Must have at least one weight file
-    if len(weight_files) == 0:
+    elif model_id == "realesrgan":
+        # Check for RealESRGAN model files
+        model_files = list(local_dir.rglob("*.pth"))
+        
+        if len(model_files) == 0:
+            logger.warning(f"⚠️ {config['name']}: No .pth model files found")
+            return False
+        
+        # Check for specific RealESRGAN models
+        expected_models = ["RealESRGAN_x4plus.pth", "RealESRGAN_x4plus_anime_6B.pth"]
+        found_models = [f.name for f in model_files]
+        missing_models = [m for m in expected_models if m not in found_models]
+        
+        if missing_models:
+            logger.warning(f"⚠️ {config['name']}: Missing expected models: {missing_models}")
+        
+        logger.info(f"✅ {config['name']}: Found {len(model_files)} model files")
+        logger.info(f"📁 Models: {found_models}")
+
+    elif model_id == "rife":
+        # Check for RIFE model files
+        model_files = list(local_dir.rglob("*.pth"))
+        
+        if len(model_files) == 0:
+            logger.warning(f"⚠️ {config['name']}: No RIFE model files found")
+            return False
+        
+        # Check for specific RIFE models
+        expected_models = ["rife-v2.3.pth"]
+        found_models = [f.name for f in model_files]
+        missing_models = [m for m in expected_models if m not in found_models]
+        
+        if missing_models:
+            logger.warning(f"⚠️ {config['name']}: Missing expected models: {missing_models}")
+        
+        logger.info(f"✅ {config['name']}: Found {len(model_files)} model files")
+        logger.info(f"📁 Models: {found_models}")
+
+    elif model_id == "film":
+        # Check for FILM repository files
+        python_files = list(local_dir.rglob("*.py"))
+        readme_files = list(local_dir.rglob("README.md"))
+        
+        if len(python_files) == 0:
+            logger.warning(f"⚠️ {config['name']}: No Python files found")
+            return False
+        
+        # Check for key FILM files (more flexible)
+        expected_files = ["predict.py", "model_lib.py", "eval_lib.py"]
+        found_files = [f.name for f in python_files]
+        found_expected = [f for f in expected_files if f in found_files]
+        
+        if len(found_expected) == 0:
+            logger.warning(f"⚠️ {config['name']}: No expected FILM files found")
+        else:
+            logger.info(f"✅ {config['name']}: Found expected files: {found_expected}")
+        
+        logger.info(f"✅ {config['name']}: Found {len(python_files)} Python files")
+        if readme_files:
+            logger.info(f"📖 Documentation available: {readme_files[0].name}")
+        
+        # FILM doesn't need weight files - it uses TensorFlow Hub
+        return True
+
+    # Must have at least one weight file (for non-direct URL models, except FILM)
+    if (config.get("download_type") != "direct_url" and 
+        config.get("download_type") != "git_clone" and 
+        len(weight_files) == 0):
         logger.warning(f"⚠️ {config['name']}: No weight files found")
         return False
 

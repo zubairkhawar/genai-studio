@@ -1240,6 +1240,8 @@ async def delete_model(model_name: str):
         model_paths = {
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
             "animatediff": pathlib.Path("../models/video/animatediff"),
+            "realesrgan": pathlib.Path("../models/upscaling/realesrgan"),
+            "film": pathlib.Path("../models/interpolation/film"),
             # Bark stores in cache; also keep a local mirror under ../models/audio/bark
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
         }
@@ -1247,6 +1249,8 @@ async def delete_model(model_name: str):
         name_to_status_key = {
             "stable-diffusion": "stable_diffusion",
             "animatediff": "animatediff",
+            "realesrgan": "realesrgan",
+            "film": "film",
             "bark": "bark",
         }
 
@@ -1627,6 +1631,9 @@ async def delete_models():
         # List of model directories to delete
         model_dirs = [
             ('image', 'stable-diffusion'), 
+            ('video', 'animatediff'),
+            ('upscaling', 'realesrgan'),
+            ('interpolation', 'film'),
             ('audio', 'bark'),
             ('', 'huggingface')  # Common cache directory
         ]
