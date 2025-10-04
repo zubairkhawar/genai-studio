@@ -268,17 +268,24 @@ def download_bark_preset_audios() -> bool:
         ]
 
         downloaded_count = 0
+        failed_downloads = []
+        
         for preset in preset_audios:
             try:
                 # Download prompt audio (main preview)
                 prompt_file = preset_dir / f"{preset['id'].replace('/', '_')}-preview.mp3"
                 if not prompt_file.exists():
                     logger.info(f"📥 Downloading {preset['name']} prompt audio...")
-                    response = requests.get(preset['prompt_url'], timeout=30)
-                    response.raise_for_status()
-                    with open(prompt_file, 'wb') as f:
-                        f.write(response.content)
-                    logger.info(f"✅ Downloaded {preset['name']} prompt audio")
+                    try:
+                        response = requests.get(preset['prompt_url'], timeout=60)  # Increased timeout
+                        response.raise_for_status()
+                        with open(prompt_file, 'wb') as f:
+                            f.write(response.content)
+                        logger.info(f"✅ Downloaded {preset['name']} prompt audio")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to download {preset['name']} prompt audio: {e}")
+                        failed_downloads.append(f"{preset['name']} prompt")
+                        continue
                 else:
                     logger.info(f"⏭️ {preset['name']} prompt audio already exists")
 
@@ -286,26 +293,36 @@ def download_bark_preset_audios() -> bool:
                 continuation_file = preset_dir / f"{preset['id'].replace('/', '_')}-continuation.mp3"
                 if not continuation_file.exists():
                     logger.info(f"📥 Downloading {preset['name']} continuation audio...")
-                    response = requests.get(preset['continuation_url'], timeout=30)
-                    response.raise_for_status()
-                    with open(continuation_file, 'wb') as f:
-                        f.write(response.content)
-                    logger.info(f"✅ Downloaded {preset['name']} continuation audio")
+                    try:
+                        response = requests.get(preset['continuation_url'], timeout=60)  # Increased timeout
+                        response.raise_for_status()
+                        with open(continuation_file, 'wb') as f:
+                            f.write(response.content)
+                        logger.info(f"✅ Downloaded {preset['name']} continuation audio")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to download {preset['name']} continuation audio: {e}")
+                        failed_downloads.append(f"{preset['name']} continuation")
+                        # Don't fail the entire preset for continuation audio failure
                 else:
                     logger.info(f"⏭️ {preset['name']} continuation audio already exists")
 
                 downloaded_count += 1
             except Exception as e:
                 logger.error(f"❌ Failed to download {preset['name']}: {e}")
+                failed_downloads.append(preset['name'])
                 continue
 
         if downloaded_count > 0:
             logger.info(f"✅ Downloaded {downloaded_count} Bark preset audio sets (English only)")
+            if failed_downloads:
+                logger.warning(f"⚠️ Some downloads failed: {', '.join(failed_downloads)}")
             # Clean up any non-English preset files to save space
             cleanup_non_english_presets(preset_dir)
             return True
         else:
             logger.warning("⚠️ No Bark preset audios were downloaded")
+            if failed_downloads:
+                logger.error(f"❌ All downloads failed: {', '.join(failed_downloads)}")
             return False
 
     except Exception as e:
