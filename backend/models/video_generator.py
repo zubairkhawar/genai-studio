@@ -686,9 +686,13 @@ class VideoGenerator:
         """Upscale a video using FFmpeg bicubic scaling and faststart for web playback"""
         try:
             import subprocess
+            import tempfile
             from pathlib import Path
             in_path = Path(input_path)
-            out_path = in_path.with_name(in_path.stem + f"_{target_width}x{target_height}" + in_path.suffix)
+            
+            # Create a temporary file for the upscaled video
+            with tempfile.NamedTemporaryFile(suffix=in_path.suffix, delete=False) as temp_file:
+                temp_path = temp_file.name
 
             cmd = [
                 "ffmpeg", "-y",
@@ -699,12 +703,25 @@ class VideoGenerator:
                 "-crf", "20",
                 "-preset", "medium",
                 "-movflags", "+faststart",
-                str(out_path)
+                temp_path
             ]
             subprocess.run(cmd, check=True, capture_output=True, text=True)
-            return str(out_path)
+            
+            # Replace the original file with the upscaled version
+            import shutil
+            shutil.move(temp_path, str(in_path))
+            
+            return str(in_path)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"FFmpeg upscale failed: {e.stderr}")
+        except Exception as e:
+            # Clean up temp file if it exists
+            try:
+                if 'temp_path' in locals() and Path(temp_path).exists():
+                    Path(temp_path).unlink()
+            except:
+                pass
+            raise RuntimeError(f"Video upscale failed: {e}")
     
     async def _save_frames_as_gif(self, frames: List[Image.Image], output_path: str) -> str:
         """Save frames as GIF using PIL"""
