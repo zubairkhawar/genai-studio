@@ -42,11 +42,13 @@ MODELS = {
     },
     "stablesr": {
         "name": "StableSR (optional)",
-        "repo_id": "Stability-AI/StableSR",  # placeholder; optional
+        # No public official repo; leave placeholder and treat as optional skip
+        "repo_id": "invalid/StableSR",
         "local_dir": str(config.get_model_path("upscaling", "stablesr")),
         "size_gb": 2.0,
         "priority": 4,
         "description": "StableSR weights if available (optional)",
+        "optional": True,
     },
     "animatediff": {
         "name": "AnimateDiff Official Repository",
@@ -1500,6 +1502,9 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
                     success = download_animatediff_models()
                 elif model_id == "animatediff_motion_adapter":
                     # Skip motion adapter as it's handled by download_animatediff_models
+                    success = True
+                elif MODELS[model_id].get("optional"):
+                    logger.info(f"⏭️ Skipping optional model {config['name']} (no public repo)")
                     success = True
                 else:
                     success = download_model_with_retry(model_id, force, max_retries=5)  # More retries for critical models
