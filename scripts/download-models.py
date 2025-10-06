@@ -968,115 +968,61 @@ def download_additional_bark_components(local_bark_dir: pathlib.Path) -> bool:
         return False
 
 def download_bark_models() -> bool:
-    """Special handling for Bark models"""
+    """Download Bark models directly to models directory with preset audios"""
     try:
         logger.info("🎵 Setting up Bark models...")
         
-        # Try to import and preload Bark
-        try:
-            import bark
-            from bark import preload_models
-            import torch
+        # First, download the Bark repository to models directory
+        logger.info("📥 Downloading Bark repository...")
+        repo_success = download_huggingface_with_patterns("bark", force=False, max_retries=3)
+        
+        if not repo_success:
+            logger.error("❌ Failed to download Bark repository")
+            return False
+        
+        # Set up environment to use our models directory instead of cache
+        local_bark_dir = pathlib.Path("models/audio/bark")
+        if local_bark_dir.exists():
+            # Set environment variable to use our directory
+            import os
+            os.environ["BARK_CACHE_DIR"] = str(local_bark_dir.absolute())
             
-            # Fix PyTorch 2.6 weights_only issue for Bark
+            # Try to import and preload Bark models to our directory
             try:
-                torch.serialization.add_safe_globals(['numpy.core.multiarray.scalar'])
-            except Exception:
-                pass
-
-            # Preload models (this downloads them to cache)
-            try:
-                logger.info("🔄 Preloading Bark models (this may take a while)...")
-                # Try to preload with error handling
+                import bark
+                from bark import preload_models
+                import torch
+                
+                # Fix PyTorch 2.6 weights_only issue for Bark
                 try:
+                    torch.serialization.add_safe_globals(['numpy.core.multiarray.scalar'])
+                except Exception:
+                    pass
+
+                # Preload models (this should now download to our directory)
+                try:
+                    logger.info("🔄 Preloading Bark models to models directory...")
                     preload_models()
-                    logger.info("✅ Bark models preloaded successfully")
+                    logger.info("✅ Bark models preloaded successfully to models directory")
                 except Exception as preload_error:
                     logger.warning(f"⚠️ Bark preload failed: {preload_error}")
-                    # Try alternative approach - just import bark to trigger download
-                    try:
-                        from bark import generate_audio
-                        logger.info("✅ Bark import successful, models will be downloaded on first use")
-                    except Exception as import_error:
-                        logger.warning(f"⚠️ Bark import also failed: {import_error}")
-                        logger.info("📝 Bark models will be loaded on first use")
-            except Exception as e:
-                logger.warning(f"⚠️ Bark setup failed: {e}")
-                logger.info("📝 Bark models will be loaded on first use")
-                # Continue anyway - models will be loaded when needed
-
-            # Check if Bark cache exists and copy to local directory
-            bark_cache = pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
-            local_bark_dir = pathlib.Path("models/audio/bark")
+                    logger.info("📝 Bark models will be loaded on first use")
+            except ImportError:
+                logger.warning("⚠️ Bark package not available, models will be loaded on first use")
             
-            if bark_cache.exists():
-                # Calculate cache size
-                total_size = sum(f.stat().st_size for f in bark_cache.rglob("*") if f.is_file())
-                size_mb = total_size / (1024 * 1024)
-                logger.info(f"✅ Bark models ready ({size_mb:.1f} MB)")
-                
-                # Create local directory and copy models
-                local_bark_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(f"📁 Copying Bark models to local directory: {local_bark_dir}")
-                
-                # Copy all files from cache to local directory
-                copied_files = 0
-                for file_path in bark_cache.rglob("*"):
-                    if file_path.is_file():
-                        relative_path = file_path.relative_to(bark_cache)
-                        dest_path = local_bark_dir / relative_path
-                        dest_path.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(file_path, dest_path)
-                        copied_files += 1
-                        logger.info(f"📄 Copied: {relative_path}")
-                
-                logger.info(f"✅ Bark models copied to local directory ({copied_files} files)")
-
-                # Download additional Bark components if missing
-                download_additional_bark_components(local_bark_dir)
-
-                # Download preset audios after successful model setup
-                download_bark_preset_audios()
-                
-                # Skip voice preview generation during download to avoid compatibility issues
-                logger.info("📝 Bark models are ready. Voice previews will be generated on first use.")
-
-                # Clean up non-English embeddings if they exist in local directory
-                local_bark_dir = pathlib.Path("models/audio/bark")
-                if local_bark_dir.exists():
-                    embeddings_dir = local_bark_dir / "speaker_embeddings"
-                    if embeddings_dir.exists():
-                        cleanup_non_english_embeddings(embeddings_dir)
-
-                return True
-            else:
-                logger.warning("⚠️ Bark cache not found after preload, trying fallback download...")
-                # Fallback to direct repository download
-                success = download_model("bark")
-                if success:
-                    return True
-                else:
-                    raise Exception("Both Bark preload and repository download failed")
-
-        except ImportError:
-            # Fallback: download Bark repository (will include configs)
-            logger.info("📦 Bark package not found, downloading repository...")
-            success = download_model("bark")
-            if success:
-                # Download preset audios after successful model download
-                download_bark_preset_audios()
-                
-                # Skip voice preview generation during download to avoid compatibility issues
-                logger.info("📝 Bark models are ready. Voice previews will be generated on first use.")
-
-                # Clean up non-English embeddings if they exist in local directory
-                local_bark_dir = pathlib.Path("models/audio/bark")
-                if local_bark_dir.exists():
-                    embeddings_dir = local_bark_dir / "speaker_embeddings"
-                    if embeddings_dir.exists():
-                        cleanup_non_english_embeddings(embeddings_dir)
-
-                return success
+            # Download preset audios
+            download_bark_preset_audios()
+            
+            # Clean up non-English embeddings if they exist
+            embeddings_dir = local_bark_dir / "speaker_embeddings"
+            if embeddings_dir.exists():
+                cleanup_non_english_embeddings(embeddings_dir)
+            
+            logger.info("✅ Bark models setup completed")
+            return True
+        else:
+            logger.error("❌ Bark models directory not found after download")
+            return False
 
     except Exception as e:
         logger.warning(f"⚠️ Bark setup failed (non-critical): {e}")

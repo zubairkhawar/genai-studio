@@ -14,6 +14,7 @@ interface Model {
   sample_rate?: number;
   size_gb?: number;
   loaded: boolean;
+  grouped_models?: string[];
 }
 
 export default function Page() {
@@ -423,12 +424,23 @@ export default function Page() {
   };
 
   const deleteModel = async (modelName: string, modelType: 'video' | 'audio' | 'image') => {
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${modelName}?\n\n` +
-      `This will free up storage space but you'll need to download it again to use it.\n\n` +
-      `This action cannot be undone.`
-    );
+    // Find the model to check if it has grouped models
+    const allModels = [...models.video_models, ...models.audio_models, ...models.image_models];
+    const model = allModels.find(m => m.id === modelName);
+    
+    let confirmMessage = `Are you sure you want to delete ${modelName}?\n\n`;
+    
+    if (model?.grouped_models && model.grouped_models.length > 0) {
+      confirmMessage += `This will delete the entire Enhanced Video Pipeline including:\n`;
+      confirmMessage += `• AnimateDiff\n`;
+      confirmMessage += `• RealESRGAN\n`;
+      confirmMessage += `• FILM Frame Interpolation\n\n`;
+    }
+    
+    confirmMessage += `This will free up storage space but you'll need to download it again to use it.\n\n`;
+    confirmMessage += `This action cannot be undone.`;
+    
+    const confirmed = window.confirm(confirmMessage);
     
     if (!confirmed) {
       return;
@@ -442,7 +454,7 @@ export default function Page() {
       const result = await response.json();
       
       if (response.ok && result.deleted) {
-        alert(`✅ ${result.message}\n\nFreed up ${result.size_freed_gb} GB of storage space.`);
+        alert(`✅ ${result.message}\n\nFreed up ${result.size_gb || result.size_freed_gb || 0} GB of storage space.`);
         // Refresh models list
         fetchModels();
       } else {

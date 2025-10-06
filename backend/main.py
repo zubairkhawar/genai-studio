@@ -1242,6 +1242,7 @@ async def delete_model(model_name: str):
             "animatediff": pathlib.Path("../models/video/animatediff"),
             "realesrgan": pathlib.Path("../models/upscaling/realesrgan"),
             "film": pathlib.Path("../models/interpolation/film"),
+            "enhanced-pipeline": None,  # Special case - will handle grouped deletion
             # Bark stores in cache; also keep a local mirror under ../models/audio/bark
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
         }
@@ -1251,12 +1252,49 @@ async def delete_model(model_name: str):
             "animatediff": "animatediff",
             "realesrgan": "realesrgan",
             "film": "film",
+            "enhanced-pipeline": "enhanced_pipeline",
             "bark": "bark",
         }
 
         if model_name not in model_paths:
             # Return a proper 400 for unknown/undefined names
             raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
+
+        # Handle enhanced-pipeline deletion (delete all grouped models)
+        if model_name == "enhanced-pipeline":
+            deleted_models = []
+            enhanced_pipeline_models = ["animatediff", "realesrgan", "film"]
+            total_size_gb = 0
+            
+            for sub_model in enhanced_pipeline_models:
+                sub_path = model_paths[sub_model]
+                if sub_path.exists():
+                    # Calculate size before deletion
+                    sub_size = 0
+                    if sub_path.is_dir():
+                        for file_path in sub_path.rglob('*'):
+                            if file_path.is_file():
+                                sub_size += file_path.stat().st_size
+                    total_size_gb += sub_size / (1024**3)
+                    
+                    # Delete the model
+                    shutil.rmtree(sub_path)
+                    deleted_models.append(sub_model)
+                    print(f"Deleted model: {sub_model}")
+                    
+                    # Update download status for each sub-model
+                    status_key = name_to_status_key.get(sub_model)
+                    if status_key:
+                        download_status[status_key] = "not_downloaded"
+            
+            if deleted_models:
+                return {
+                    "message": f"Enhanced pipeline deleted successfully. Removed: {', '.join(deleted_models)}",
+                    "deleted": True,
+                    "size_gb": round(total_size_gb, 2)
+                }
+            else:
+                return {"message": "Enhanced pipeline models not found", "deleted": False}
 
         model_path = model_paths[model_name]
 

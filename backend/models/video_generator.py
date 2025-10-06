@@ -21,6 +21,25 @@ class VideoGenerator:
         self.device = gpu_info["device"]
         self.models = {}
         self.available_models = {
+            "enhanced-pipeline": {
+                "id": "enhanced-pipeline",
+                "name": "Enhanced Video Pipeline",
+                "description": "Complete pipeline: Text → SD → AnimateDiff → RealESRGAN → FILM → FFmpeg for high-quality, noise-free videos",
+                "max_duration": 5,
+                "resolution": "1024x1024",
+                "type": "text2vid",
+                "workflow": True,
+                "grouped_models": ["animatediff", "realesrgan", "film"],
+                "features": [
+                    "High-quality keyframe generation",
+                    "Motion synthesis",
+                    "Spatial super-resolution",
+                    "Temporal super-resolution",
+                    "Noise reduction",
+                    "Motion smoothing",
+                    "Optimized encoding"
+                ]
+            },
             "animatediff": {
                 "id": "animatediff",
                 "name": "AnimateDiff",
@@ -29,6 +48,7 @@ class VideoGenerator:
                 "resolution": "512x512",
                 "type": "text2vid",
                 "workflow": False,
+                "parent_group": "enhanced-pipeline",
                 "features": [
                     "GIF generation",
                     "Looping animations",
@@ -45,6 +65,7 @@ class VideoGenerator:
                 "resolution": "4x upscaling",
                 "type": "upscaling",
                 "workflow": True,
+                "parent_group": "enhanced-pipeline",
                 "features": [
                     "4x upscaling",
                     "Noise reduction",
@@ -60,6 +81,7 @@ class VideoGenerator:
                 "resolution": "FPS enhancement",
                 "type": "interpolation",
                 "workflow": True,
+                "parent_group": "enhanced-pipeline",
                 "features": [
                     "Frame interpolation",
                     "Motion smoothing",
@@ -187,55 +209,87 @@ class VideoGenerator:
             return False
     
     def get_available_models(self) -> List[Dict[str, Any]]:
-        """Get list of available models"""
+        """Get list of available models with grouped pipeline support"""
         available = []
+        
         for model_id, info in self.available_models.items():
             # Skip stable-diffusion as it's handled by ImageGenerator
             if model_id == "stable-diffusion":
                 continue
+            
+            # Skip individual models that are part of a group (they'll be shown under the group)
+            if info.get("parent_group"):
+                continue
                 
             # Check if model files exist on disk
-            if model_id == "animatediff":
-                # AnimateDiff has its own motion adapter files
-                model_path = pathlib.Path(f"models/video/animatediff")
-            elif model_id == "realesrgan":
-                # RealESRGAN models are in upscaling directory
-                model_path = pathlib.Path(f"models/upscaling/realesrgan")
-            elif model_id == "film":
-                # FILM models are in interpolation directory
-                model_path = pathlib.Path(f"models/interpolation/film")
-            else:
-                model_path = pathlib.Path(f"models/video/{model_id}")
-            
-            # Always include the model, but check if it's downloaded
-            size_gb = 0
-            if model_path.exists():
-                # Check for actual model weight files (not just config files)
-                if model_id == "realesrgan":
-                    # RealESRGAN uses .pth files
-                    weight_files = list(model_path.rglob("*.pth"))
-                elif model_id == "film":
-                    # FILM uses Python files and doesn't need weight files (uses TensorFlow Hub)
-                    weight_files = list(model_path.rglob("*.py"))
-                else:
-                    # Standard model files
-                    weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
+            if model_id == "enhanced-pipeline":
+                # Calculate total size for grouped models
+                total_size_gb = 0
+                all_downloaded = True
                 
-                if len(weight_files) > 0:
-                    # Calculate total model size
-                    total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
-                    size_gb = total_size / (1024 * 1024 * 1024)
+                for sub_model_id in info.get("grouped_models", []):
+                    sub_model_path = self._get_model_path(sub_model_id)
+                    sub_size = self._calculate_model_size(sub_model_id, sub_model_path)
+                    total_size_gb += sub_size
+                    
+                    if sub_size == 0:
+                        all_downloaded = False
+                
+                size_gb = round(total_size_gb, 2) if all_downloaded else 0
+            else:
+                # Individual model
+                model_path = self._get_model_path(model_id)
+                size_gb = round(self._calculate_model_size(model_id, model_path), 2)
             
             available.append({
                 "id": model_id,
                 "name": info["name"],
                 "description": info["description"],
                 "max_duration": info["max_duration"],
-                "resolution": info["resolution"],
-                "size_gb": round(size_gb, 2) if size_gb > 0 else 0,
-                "loaded": model_id in self.models
+                "resolution": info.get("resolution", "512x512"),
+                "type": info.get("type", "text2vid"),
+                "workflow": info.get("workflow", False),
+                "features": info.get("features", []),
+                "size_gb": size_gb,
+                "loaded": model_id in self.models,
+                "grouped_models": info.get("grouped_models", [])
             })
+        
         return available
+    
+    def _get_model_path(self, model_id: str) -> pathlib.Path:
+        """Get the file path for a model"""
+        if model_id == "animatediff":
+            return pathlib.Path("models/video/animatediff")
+        elif model_id == "realesrgan":
+            return pathlib.Path("models/upscaling/realesrgan")
+        elif model_id == "film":
+            return pathlib.Path("models/interpolation/film")
+        else:
+            return pathlib.Path(f"models/video/{model_id}")
+    
+    def _calculate_model_size(self, model_id: str, model_path: pathlib.Path) -> float:
+        """Calculate the size of a model in GB"""
+        if not model_path.exists():
+            return 0.0
+        
+        # Check for actual model weight files (not just config files)
+        if model_id == "realesrgan":
+            # RealESRGAN uses .pth files
+            weight_files = list(model_path.rglob("*.pth"))
+        elif model_id == "film":
+            # FILM uses Python files and doesn't need weight files (uses TensorFlow Hub)
+            weight_files = list(model_path.rglob("*.py"))
+        else:
+            # Standard model files
+            weight_files = list(model_path.rglob("*.safetensors")) + list(model_path.rglob("*.bin")) + list(model_path.rglob("*.pt")) + list(model_path.rglob("*.pth"))
+        
+        if len(weight_files) > 0:
+            # Calculate total model size
+            total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
+            return total_size / (1024 * 1024 * 1024)
+        
+        return 0.0
     
     async def generate(self, prompt: str, model_name: str, duration: int = 5, 
                       output_format: str = "mp4", image_input: Optional[Union[str, Image.Image]] = None,
