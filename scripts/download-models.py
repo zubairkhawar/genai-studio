@@ -1106,6 +1106,11 @@ def verify_model_integrity(model_id: str) -> bool:
     config = MODELS[model_id]
     local_dir = pathlib.Path(config["local_dir"])
 
+    # Optional models: treat as pass if directory missing or empty
+    if config.get("optional"):
+        if not local_dir.exists():
+            logger.info(f"ℹ️ Optional model {config['name']}: directory not found (skipping)")
+            return True
     if not local_dir.exists():
         return False
 
@@ -1441,6 +1446,9 @@ def verify_model_integrity(model_id: str) -> bool:
     if (config.get("download_type") != "direct_url" and 
         config.get("download_type") != "git_clone" and 
         len(weight_files) == 0):
+        if config.get("optional"):
+            logger.info(f"ℹ️ Optional model {config['name']}: no weights found (skipping)")
+            return True
         logger.warning(f"⚠️ {config['name']}: No weight files found")
         return False
 
