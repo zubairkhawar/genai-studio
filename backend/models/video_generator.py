@@ -342,10 +342,9 @@ class VideoGenerator:
         try:
             pipe = self.models.get("ultimate-pipeline") or self.models.get("enhanced-pipeline")
             
-            # Check if this is a placeholder model
+            # If not loaded, fail fast instead of placeholder
             if isinstance(pipe, dict) and pipe.get("placeholder"):
-                print("Using placeholder for Enhanced Pipeline generation")
-                return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+                raise RuntimeError("Ultimate pipeline not loaded. Please ensure AnimateDiff (with motion_adapter), RealESRGAN, FILM, and StableSR (optional) are downloaded correctly.")
             
             # Check if this is a generator model
             if isinstance(pipe, dict) and pipe.get("generator"):
@@ -373,9 +372,8 @@ class VideoGenerator:
                     print("Enhanced Pipeline generator instance not available, using placeholder")
                     return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
             
-            # Fallback to placeholder
-            print("Using placeholder for Ultimate Pipeline generation")
-            return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+            # If no generator available
+            raise RuntimeError("Ultimate pipeline generator instance unavailable")
             
         except Exception as e:
             raise RuntimeError(f"Ultimate Pipeline generation failed: {e}")
@@ -401,7 +399,7 @@ class VideoGenerator:
                     seed=kwargs.get("seed"),
                     progress_callback=progress_callback,
                 )
-            return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+            raise RuntimeError("Ultimate Pipeline generation unavailable")
         except Exception as e:
             raise RuntimeError(f"Ultimate Pipeline generation failed: {e}")
     

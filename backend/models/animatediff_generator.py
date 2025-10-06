@@ -181,10 +181,15 @@ class AnimateDiffGenerator:
                 logger.error("Stable Diffusion model not found locally")
                 return False
             
-            # Verify motion adapter exists
+            # Verify motion adapter exists (and normalize its layout)
             if not self._verify_motion_adapter():
                 logger.error("Motion adapter not found")
                 return False
+            # Ensure expected filenames exist for diffusers MotionAdapter
+            try:
+                self._ensure_motion_adapter_layout()
+            except Exception as layout_err:
+                logger.warning(f"Could not normalize motion adapter layout: {layout_err}")
             
             # Load motion adapter
             logger.info("Loading motion adapter...")
@@ -239,6 +244,38 @@ class AnimateDiffGenerator:
         except Exception as e:
             logger.error(f"Failed to load AnimateDiff model: {e}")
             return False
+
+    def _ensure_motion_adapter_layout(self) -> None:
+        """Create expected files for MotionAdapter if the repo uses different names.
+
+        diffusers expects `diffusion_pytorch_model.safetensors` (or .bin) in the
+        adapter directory. Some repos provide differently named files. This
+        normalizes by creating a symlink (or copy) to the first available
+        *.safetensors/*.bin file.
+        """
+        target_st = self.motion_adapter_dir / "diffusion_pytorch_model.safetensors"
+        target_bin = self.motion_adapter_dir / "diffusion_pytorch_model.bin"
+        # If either expected file exists, nothing to do
+        if target_st.exists() or target_bin.exists():
+            return
+
+        # Find any candidate weight
+        candidates = list(self.motion_adapter_dir.glob("*.safetensors")) or list(self.motion_adapter_dir.glob("*.bin"))
+        if not candidates:
+            raise FileNotFoundError("No motion adapter weight files (*.safetensors|*.bin) found")
+
+        src = candidates[0]
+        try:
+            if src.suffix == ".safetensors":
+                os.symlink(src.name, str(target_st)) if not target_st.exists() else None
+            else:
+                os.symlink(src.name, str(target_bin)) if not target_bin.exists() else None
+            logger.info(f"Linked motion adapter weight: {src.name} → {target_st.name if src.suffix=='.safetensors' else target_bin.name}")
+        except Exception:
+            # Fallback: copy
+            import shutil
+            shutil.copy2(str(src), str(target_st if src.suffix == ".safetensors" else target_bin))
+            logger.info(f"Copied motion adapter weight: {src.name}")
     
     def _apply_hardware_optimizations(self):
         """Apply hardware-specific optimizations based on detected configuration"""
