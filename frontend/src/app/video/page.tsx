@@ -13,7 +13,7 @@ export default function Page() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [settings, setSettings] = useState({
     format: 'mp4',
-    model: 'animatediff',
+    model: 'ultimate-pipeline',
     // Advanced settings
     width: 512,
     height: 512,
@@ -34,27 +34,28 @@ export default function Page() {
   const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   // Preset configurations for different hardware
+  // Presets match Ultimate pipeline table; UI shows only AnimateDiff knobs
   const presets = {
     'ultra-fast': {
       name: 'Ultra Fast',
       description: 'Quick generation, basic quality',
-      width: 256,
-      height: 256,
+      width: 512,
+      height: 512,
       numFrames: 8,
-      numInferenceSteps: 15,
-      guidanceScale: 7.0,
-      motionScale: 1.2,
-      fps: 6,
+      numInferenceSteps: 20,
+      guidanceScale: 6.5,
+      motionScale: 1.0,
+      fps: 8,
       estimatedTime: '30-60s'
     },
     'balanced': {
       name: 'Balanced',
       description: 'Good quality, reasonable speed',
-      width: 384,
-      height: 384,
+      width: 640,
+      height: 640,
       numFrames: 16,
-      numInferenceSteps: 25,
-      guidanceScale: 7.5,
+      numInferenceSteps: 30,
+      guidanceScale: 7.0,
       motionScale: 1.4,
       fps: 8,
       estimatedTime: '1-2min'
@@ -62,16 +63,16 @@ export default function Page() {
     'high-quality': {
       name: 'High Quality',
       description: 'Great quality, longer generation',
-      width: 512,
-      height: 512,
+      width: 768,
+      height: 768,
       numFrames: 24,
-      numInferenceSteps: 30,
+      numInferenceSteps: 35,
       guidanceScale: 7.5,
-      motionScale: 1.5,
+      motionScale: 1.8,
       fps: 8,
       estimatedTime: '2-4min'
     },
-  };
+  } as const;
 
   const applyPreset = (presetKey: keyof typeof presets) => {
     const preset = presets[presetKey];
@@ -240,7 +241,8 @@ export default function Page() {
                       onChange={(e) => setSettings(prev => ({ ...prev, model: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                     >
-                      <option value="animatediff">AnimateDiff</option>
+                      <option value="ultimate-pipeline">Ultimate Pipeline</option>
+                      <option value="animatediff">AnimateDiff (Legacy)</option>
                     </select>
                   </div>
                   <div>

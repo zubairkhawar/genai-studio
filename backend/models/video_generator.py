@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 import tempfile
 import shutil
 from .animatediff_generator import AnimateDiffGenerator
-from .enhanced_video_generator import EnhancedVideoGenerator
+from .ultimate_video_generator import UltimateVideoGenerator
 
 class VideoGenerator:
     """Text-to-video generation using various models"""
@@ -21,18 +21,19 @@ class VideoGenerator:
         self.device = gpu_info["device"]
         self.models = {}
         self.available_models = {
-            "enhanced-pipeline": {
-                "id": "enhanced-pipeline",
-                "name": "Enhanced Video Pipeline",
-                "description": "Complete pipeline: Text → SD → AnimateDiff → RealESRGAN → FILM → FFmpeg for high-quality, noise-free videos",
+            "ultimate-pipeline": {
+                "id": "ultimate-pipeline",
+                "name": "Ultimate Video Pipeline",
+                "description": "Text → SD → AnimateDiff → StableSR → RealESRGAN → FILM → FFmpeg",
                 "max_duration": 5,
                 "resolution": "1024x1024",
                 "type": "text2vid",
                 "workflow": True,
-                "grouped_models": ["animatediff", "realesrgan", "film"],
+                "grouped_models": ["animatediff", "stablesr", "realesrgan", "film"],
                 "features": [
                     "High-quality keyframe generation",
                     "Motion synthesis",
+                    "Denoise & refine",
                     "Spatial super-resolution",
                     "Temporal super-resolution",
                     "Noise reduction",
@@ -65,12 +66,27 @@ class VideoGenerator:
                 "resolution": "4x upscaling",
                 "type": "upscaling",
                 "workflow": True,
-                "parent_group": "enhanced-pipeline",
+                "parent_group": "ultimate-pipeline",
                 "features": [
                     "4x upscaling",
                     "Noise reduction",
                     "Edge sharpening",
                     "Quality enhancement"
+                ]
+            },
+            "stablesr": {
+                "id": "stablesr",
+                "name": "StableSR Refiner",
+                "description": "Denoise & refine between motion and upscaling",
+                "max_duration": 0,
+                "resolution": "refinement",
+                "type": "refiner",
+                "workflow": True,
+                "parent_group": "ultimate-pipeline",
+                "features": [
+                    "Denoising",
+                    "Local contrast",
+                    "Sharpening"
                 ]
             },
             "film": {
@@ -149,25 +165,25 @@ class VideoGenerator:
                     pipe = {"placeholder": True, "name": "animatediff"}
                     
                     
-            elif model_name == "enhanced-pipeline":
-                # Initialize Enhanced Video Pipeline
+            elif model_name == "ultimate-pipeline":
+                # Initialize Ultimate Video Pipeline
                 try:
-                    print(f"Loading Enhanced Video Pipeline...")
-                    enhanced_generator = EnhancedVideoGenerator(gpu_info=self.gpu_info)
+                    print(f"Loading Ultimate Video Pipeline...")
+                    ultimate = UltimateVideoGenerator(gpu_info=self.gpu_info)
                     
-                    # Load all models for the enhanced pipeline
-                    success = await enhanced_generator.load_models()
+                    # Load all models for the ultimate pipeline
+                    success = await ultimate.load_models()
                     
                     if success:
-                        print("✅ Successfully loaded Enhanced Video Pipeline")
-                        pipe = {"generator": True, "name": "enhanced-pipeline", "generator_instance": enhanced_generator}
+                        print("✅ Successfully loaded Ultimate Video Pipeline")
+                        pipe = {"generator": True, "name": "ultimate-pipeline", "generator_instance": ultimate}
                     else:
-                        print("❌ Failed to load Enhanced Video Pipeline, using placeholder")
-                        pipe = {"placeholder": True, "name": "enhanced-pipeline"}
+                        print("❌ Failed to load Ultimate Video Pipeline, using placeholder")
+                        pipe = {"placeholder": True, "name": "ultimate-pipeline"}
                         
                 except Exception as e:
-                    print(f"Could not load Enhanced Video Pipeline: {e}")
-                    pipe = {"placeholder": True, "name": "enhanced-pipeline"}
+                    print(f"Could not load Ultimate Video Pipeline: {e}")
+                    pipe = {"placeholder": True, "name": "ultimate-pipeline"}
                     
             elif model_name == "stable-diffusion":
                 # Initialize Stable Diffusion text-to-image generator
@@ -198,7 +214,7 @@ class VideoGenerator:
                     
                 
             else:
-                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, enhanced-pipeline, stable-diffusion")
+                raise ValueError(f"Unknown model: {model_name}. Supported models: animatediff, ultimate-pipeline, stable-diffusion")
             
             self.models[model_name] = pipe
             print(f"Successfully loaded model: {model_name}")
@@ -222,7 +238,7 @@ class VideoGenerator:
                 continue
                 
             # Check if model files exist on disk
-            if model_id == "enhanced-pipeline":
+            if model_id == "ultimate-pipeline":
                 # Calculate total size for grouped models
                 total_size_gb = 0
                 all_downloaded = True
@@ -261,6 +277,8 @@ class VideoGenerator:
         """Get the file path for a model"""
         if model_id == "animatediff":
             return pathlib.Path("models/video/animatediff")
+        elif model_id == "stablesr":
+            return pathlib.Path("models/upscaling/stablesr")
         elif model_id == "realesrgan":
             return pathlib.Path("models/upscaling/realesrgan")
         elif model_id == "film":
@@ -304,8 +322,8 @@ class VideoGenerator:
                 raise RuntimeError(f"Could not load model: {model_name}")
             
             # Generate video using the appropriate method
-            if model_name == "enhanced-pipeline":
-                return await self._generate_with_enhanced_pipeline(prompt, duration, output_format, progress_callback, **kwargs)
+            if model_name == "ultimate-pipeline":
+                return await self._generate_with_ultimate_pipeline(prompt, duration, output_format, progress_callback, **kwargs)
             elif model_name == "animatediff":
                 return await self._generate_with_animatediff(prompt, duration, output_format, progress_callback, **kwargs)
             elif model_name == "stable-diffusion":
@@ -322,7 +340,7 @@ class VideoGenerator:
                                              progress_callback: Optional[callable] = None, **kwargs) -> str:
         """Generate video using the enhanced pipeline"""
         try:
-            pipe = self.models["enhanced-pipeline"]
+            pipe = self.models.get("ultimate-pipeline") or self.models.get("enhanced-pipeline")
             
             # Check if this is a placeholder model
             if isinstance(pipe, dict) and pipe.get("placeholder"):
@@ -356,11 +374,36 @@ class VideoGenerator:
                     return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
             
             # Fallback to placeholder
-            print("Using placeholder for Enhanced Pipeline generation")
+            print("Using placeholder for Ultimate Pipeline generation")
             return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
             
         except Exception as e:
-            raise RuntimeError(f"Enhanced Pipeline generation failed: {e}")
+            raise RuntimeError(f"Ultimate Pipeline generation failed: {e}")
+
+    async def _generate_with_ultimate_pipeline(self, prompt: str, duration: int, output_format: str, 
+                                             progress_callback: Optional[callable] = None, **kwargs) -> str:
+        try:
+            pipe = self.models["ultimate-pipeline"]
+            if isinstance(pipe, dict) and pipe.get("generator"):
+                generator = pipe.get("generator_instance")
+                preset = kwargs.get("preset", "balanced")
+                ad_overrides = {
+                    "frames": min(max(duration * 8, 8), 24),
+                    "fps": kwargs.get("fps", 8),
+                    "motion_scale": kwargs.get("motion_scale", 1.4),
+                    "steps": kwargs.get("num_inference_steps", 30),
+                }
+                return await generator.generate(
+                    prompt=prompt,
+                    preset=preset,
+                    negative_prompt=kwargs.get("negative_prompt"),
+                    ad_overrides=ad_overrides,
+                    seed=kwargs.get("seed"),
+                    progress_callback=progress_callback,
+                )
+            return await self._generate_placeholder(prompt, duration, output_format, palette=(34, 197, 94))
+        except Exception as e:
+            raise RuntimeError(f"Ultimate Pipeline generation failed: {e}")
     
     async def generate_video_improved(self, prompt: str,
                            num_frames: int = 16,

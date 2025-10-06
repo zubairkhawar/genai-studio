@@ -40,6 +40,14 @@ MODELS = {
         "priority": 1,  # High priority - base model
         "description": "Text-to-image generation (base model for AnimateDiff)"
     },
+    "stablesr": {
+        "name": "StableSR (optional)",
+        "repo_id": "Stability-AI/StableSR",  # placeholder; optional
+        "local_dir": str(config.get_model_path("upscaling", "stablesr")),
+        "size_gb": 2.0,
+        "priority": 4,
+        "description": "StableSR weights if available (optional)",
+    },
     "animatediff": {
         "name": "AnimateDiff Official Repository",
         "repo_id": "guoyww/AnimateDiff",
