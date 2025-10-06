@@ -41,14 +41,12 @@ MODELS = {
         "description": "Text-to-image generation (base model for AnimateDiff)"
     },
     "stablesr": {
-        "name": "StableSR (optional)",
-        # No public official repo; leave placeholder and treat as optional skip
-        "repo_id": "invalid/StableSR",
+        "name": "Stable Diffusion x4 Upscaler (StableSR stage)",
+        "repo_id": "stabilityai/stable-diffusion-x4-upscaler",
         "local_dir": str(config.get_model_path("upscaling", "stablesr")),
-        "size_gb": 2.0,
+        "size_gb": 7.0,
         "priority": 4,
-        "description": "StableSR weights if available (optional)",
-        "optional": True,
+        "description": "Mandatory upscaler used as StableSR denoise/refine backend",
     },
     "animatediff": {
         "name": "AnimateDiff Official Repository",
