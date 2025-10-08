@@ -15,13 +15,13 @@ export default function Page() {
     format: 'mp4',
     model: 'ultimate-pipeline',
     // Advanced settings
-    width: 512,
-    height: 512,
-    numFrames: 24,
-    numInferenceSteps: 30,
-    guidanceScale: 7.5,
-    motionScale: 1.5,
-    fps: 8,
+    width: 384,
+    height: 384,
+    numFrames: 8,
+    numInferenceSteps: 18,
+    guidanceScale: 6.5,
+    motionScale: 1.0,
+    fps: 24,
     seed: 42
   });
   const [showSettings, setShowSettings] = useState(false);
@@ -39,37 +39,37 @@ export default function Page() {
     'ultra-fast': {
       name: 'Ultra Fast',
       description: 'Quick generation, basic quality',
-      width: 512,
-      height: 512,
+      width: 384,
+      height: 384,
       numFrames: 8,
-      numInferenceSteps: 20,
+      numInferenceSteps: 18,
       guidanceScale: 6.5,
       motionScale: 1.0,
-      fps: 8,
+      fps: 24,
       estimatedTime: '30-60s'
     },
     'balanced': {
       name: 'Balanced',
       description: 'Good quality, reasonable speed',
-      width: 640,
-      height: 640,
+      width: 576,
+      height: 576,
       numFrames: 16,
       numInferenceSteps: 30,
       guidanceScale: 7.0,
       motionScale: 1.4,
-      fps: 8,
+      fps: 24,
       estimatedTime: '1-2min'
     },
     'high-quality': {
       name: 'High Quality',
       description: 'Great quality, longer generation',
-      width: 768,
-      height: 768,
+      width: 720,
+      height: 720,
       numFrames: 24,
       numInferenceSteps: 35,
       guidanceScale: 7.5,
       motionScale: 1.8,
-      fps: 8,
+      fps: 24,
       estimatedTime: '2-4min'
     },
   } as const;
@@ -91,13 +91,13 @@ export default function Page() {
   const resetToDefaults = () => {
     setSettings(prev => ({
       ...prev,
-      width: 512,
-      height: 512,
-      numFrames: 24,
-      numInferenceSteps: 30,
-      guidanceScale: 7.5,
-      motionScale: 1.5,
-      fps: 8,
+      width: 384,
+      height: 384,
+      numFrames: 8,
+      numInferenceSteps: 18,
+      guidanceScale: 6.5,
+      motionScale: 1.0,
+      fps: 24,
       seed: 42
     }));
   };
@@ -375,7 +375,6 @@ export default function Page() {
                           onChange={(e) => setSettings(prev => ({ ...prev, fps: parseInt(e.target.value) }))}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                         >
-                          <option value={6}>6 FPS (Cinematic)</option>
                           <option value={8}>8 FPS (Standard)</option>
                           <option value={12}>12 FPS (Smooth)</option>
                           <option value={24}>24 FPS (Very Smooth)</option>

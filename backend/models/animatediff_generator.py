@@ -222,17 +222,26 @@ class AnimateDiffGenerator:
             # Move to device and optimize
             self.pipeline = self.pipeline.to(self.device)
             
-            # Use DDIM scheduler with optimized settings for better frame consistency
-            self.pipeline.scheduler = DDIMScheduler.from_config(
-                self.pipeline.scheduler.config,
-                clip_sample=False,
-                timestep_spacing="linspace",
-                steps_offset=1,
-                beta_start=0.00085,
-                beta_end=0.012,
-                beta_schedule="scaled_linear",
-                prediction_type="epsilon"
-            )
+            # Prefer DPMSolverMultistep for better color fidelity and detail
+            try:
+                from diffusers import DPMSolverMultistepScheduler
+                self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                    self.pipeline.scheduler.config
+                )
+                logger.info("Using DPMSolverMultistepScheduler")
+            except Exception:
+                # Fallback to DDIM if DPMSolver is unavailable
+                self.pipeline.scheduler = DDIMScheduler.from_config(
+                    self.pipeline.scheduler.config,
+                    clip_sample=False,
+                    timestep_spacing="linspace",
+                    steps_offset=1,
+                    beta_start=0.00085,
+                    beta_end=0.012,
+                    beta_schedule="scaled_linear",
+                    prediction_type="epsilon"
+                )
+                logger.info("Using DDIMScheduler (fallback)")
             
             # Apply hardware-specific optimizations based on detected configuration
             self._apply_hardware_optimizations()
@@ -303,6 +312,16 @@ class AnimateDiffGenerator:
             if hasattr(self.pipeline, 'enable_vae_slicing'):
                 self.pipeline.enable_vae_slicing()
                 logger.info("Enabled VAE slicing")
+
+            # Force upcast VAE to float32 on MPS to avoid brownish/washed colors
+            try:
+                if self.device == "mps" and hasattr(self.pipeline, 'vae'):
+                    self.pipeline.vae.to(torch.float32)
+                    if hasattr(self.pipeline.vae.config, 'force_upcast'):
+                        self.pipeline.vae.config.force_upcast = True
+                    logger.info("VAE upcast to float32 for MPS")
+            except Exception as e:
+                logger.warning(f"Could not upcast VAE: {e}")
             
             # Apply CPU offload strategies
             if self.device == "mps":
@@ -348,6 +367,7 @@ class AnimateDiffGenerator:
         self,
         prompt: str,
         negative_prompt: Optional[str] = None,
+        init_image: Optional[Image.Image] = None,
         width: Optional[int] = None,
         height: Optional[int] = None,
         num_frames: Optional[int] = None,
@@ -438,9 +458,22 @@ class AnimateDiffGenerator:
             
             # Convert frames to video
             frames = result.frames[0]  # Get the first (and only) video
+
+            # If an init_image (SD keyframe) is provided, just use it as the first frame
+            try:
+                if init_image is not None and isinstance(init_image, Image.Image):
+                    base = init_image.resize((width, height), Image.BICUBIC)
+                    # Simply replace the first frame with the SD keyframe
+                    frames[0] = base
+                    logger.info("Applied SD keyframe as first frame only - letting AnimateDiff handle motion")
+            except Exception as e:
+                logger.warning(f"Could not apply init_image: {e}")
             
-            # Post-process frames for better consistency
-            frames = self._post_process_frames(frames)
+            # Post-process frames for better consistency (can be disabled for testing)
+            if self.config.get("enable_post_processing", True):
+                frames = self._post_process_frames(frames)
+            else:
+                logger.info("Post-processing disabled - using raw AnimateDiff frames")
             
             output_path = await self._save_video_frames(frames, prompt, output_format)
             
@@ -466,20 +499,20 @@ class AnimateDiffGenerator:
                 # Convert to numpy for processing
                 img_array = np.array(frame)
                 
-                # Apply slight sharpening to improve clarity
+                # Only apply minimal temporal smoothing to preserve content
                 if i > 0 and i < len(frames) - 1:
-                    # Apply temporal smoothing for middle frames
+                    # Very light temporal smoothing to reduce flicker without losing content
                     prev_array = np.array(frames[i-1])
                     next_array = np.array(frames[i+1])
                     
-                    # Blend with adjacent frames for smoother motion
-                    img_array = (img_array * 0.7 + prev_array * 0.15 + next_array * 0.15).astype(np.uint8)
+                    # Much lighter blend to preserve the actual content
+                    img_array = (img_array * 0.9 + prev_array * 0.05 + next_array * 0.05).astype(np.uint8)
                 
                 # Convert back to PIL Image
                 processed_frame = Image.fromarray(img_array)
                 processed_frames.append(processed_frame)
             
-            logger.info(f"Post-processed {len(processed_frames)} frames for better consistency")
+            logger.info(f"Post-processed {len(processed_frames)} frames with minimal smoothing")
             return processed_frames
             
         except Exception as e:

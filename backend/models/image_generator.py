@@ -39,7 +39,8 @@ class ImageGenerator:
         # Initialize default model
         try:
             # Check if models exist locally before attempting to load
-            sd_path = pathlib.Path("models/image/stable-diffusion")
+            project_root = pathlib.Path(__file__).parent.parent.parent
+            sd_path = project_root / "models/image/stable-diffusion"
             
             if sd_path.exists():
                 # Check if it's a complete model
@@ -246,7 +247,8 @@ class ImageGenerator:
             
             # Check if model is actually downloaded
             if model_id == "stable-diffusion":
-                sd_path = pathlib.Path("models/image/stable-diffusion")
+                project_root = pathlib.Path(__file__).parent.parent.parent
+                sd_path = project_root / "models/image/stable-diffusion"
                 if sd_path.exists():
                     # Check for essential files and directories
                     required_files = ["model_index.json", "v1-inference.yaml"]

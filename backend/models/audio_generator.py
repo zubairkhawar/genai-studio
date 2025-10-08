@@ -357,15 +357,36 @@ class AudioGenerator:
             print(f"Original prompt: {prompt}")
             print(f"Processed prompt: {processed_prompt}")
             
-            # Generate audio with specific voice preset
-            audio_array = generate_audio(processed_prompt, history_prompt=voice_preset)
+            # Generate audio with specific voice preset, with robust fallbacks
+            audio_array = None
+            try:
+                audio_array = generate_audio(processed_prompt, history_prompt=voice_preset)
+            except Exception as first_err:
+                print(f"Bark generation with history_prompt failed, retrying without preset: {first_err}")
+                try:
+                    audio_array = generate_audio(processed_prompt)
+                except Exception as second_err:
+                    print(f"Bark generation without preset also failed: {second_err}")
+                    audio_array = None
+
+            if audio_array is not None:
+                # Post-process audio to fix timing issues
+                audio_array = self._post_process_audio(audio_array, sample_rate)
+                # Save audio
+                output_path = await self._save_audio(audio_array, sample_rate, output_format)
+                return output_path
+
+            # Fallback: if presets exist locally, use preset preview MP3 as output
+            try:
+                preset_filename = f"{voice_preset.replace('/', '_')}-preview.mp3"
+                preset_path = pathlib.Path("../models/audio/bark/preset-audios") / preset_filename
+                if preset_path.exists():
+                    return await self._save_audio_from_file(str(preset_path), sample_rate, output_format)
+            except Exception as preset_err:
+                print(f"Bark preset fallback failed: {preset_err}")
             
-            # Post-process audio to fix timing issues
-            audio_array = self._post_process_audio(audio_array, sample_rate)
-            
-            # Save audio
-            output_path = await self._save_audio(audio_array, sample_rate, output_format)
-            return output_path
+            # If all attempts failed, raise the original error
+            raise RuntimeError("Bark generation failed and no preset fallback available")
             
         except Exception as e:
             print(f"Bark generation error: {e}")

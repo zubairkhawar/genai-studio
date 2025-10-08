@@ -455,8 +455,28 @@ export default function Page() {
         onClose={() => setShowDownloadModal(false)}
         missingModels={getMissingModels('audio', settings.model)}
         modelType="audio"
-        onModelsDownloaded={() => {
+        onModelsDownloaded={async () => {
+          // Recheck models
           checkModels();
+          // Trigger server-side generation of voice previews/presets
+          try {
+            console.log('[Audio] Triggering voice preview generation...');
+            const resp = await fetch(getApiUrl('/generate-voice-previews'), { method: 'POST' });
+            console.log('[Audio] Voice preview generation requested. ok =', resp.ok);
+          } catch (e) {
+            console.warn('[Audio] Failed to request voice preview generation:', e);
+          }
+          // Ensure preset MP3s are present as a fallback
+          try {
+            console.log('[Audio] Ensuring Bark preset MP3s...');
+            const resp2 = await fetch(getApiUrl('/ensure-bark-presets'), { method: 'POST' });
+            console.log('[Audio] Ensure presets requested. ok =', resp2.ok);
+          } catch (e) {
+            console.warn('[Audio] Failed to ensure bark presets:', e);
+          }
+          // Refresh locally cached preview URLs and voice list
+          fetchVoicePreviews();
+          fetchBarkVoices();
           setShowDownloadModal(false);
         }}
       />

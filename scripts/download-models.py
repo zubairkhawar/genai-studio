@@ -930,12 +930,18 @@ def download_additional_bark_components(local_bark_dir: pathlib.Path) -> bool:
         
         # List of additional Bark components that might be needed
         additional_components = [
+            # Core weights
+            "text_2.pt",
+            "coarse.pt",
+            "fine.pt",
+            # Occasionally needed alternates
+            "coarse_2.pt",
+            "fine_2.pt",
+            # Configs/tokenizer
             "config.json",
             "tokenizer.json", 
             "tokenizer_config.json",
             "vocab.txt",
-            "coarse_2.pt",
-            "fine_2.pt"
         ]
         
         missing_components = []
@@ -1018,6 +1024,45 @@ def download_bark_models() -> bool:
             except ImportError:
                 logger.warning("⚠️ Bark package not available, models will be loaded on first use")
             
+            # Attempt to mirror weights from default Bark cache to our local directory if missing
+            try:
+                cache_candidates = [
+                    pathlib.Path.home() / ".cache" / "suno" / "bark_v0",
+                    pathlib.Path.home() / ".cache" / "bark_v0",
+                ]
+                files_copied = 0
+                for cache_dir in cache_candidates:
+                    if cache_dir.exists():
+                        for pattern in ["*.pt", "*.json", "*.txt"]:
+                            for src in cache_dir.rglob(pattern):
+                                dst = local_bark_dir / src.name
+                                if not dst.exists():
+                                    try:
+                                        shutil.copy2(src, dst)
+                                        files_copied += 1
+                                    except Exception as e:
+                                        logger.debug(f"Skip copy {src} -> {dst}: {e}")
+                        # Copy speaker_embeddings directory if present
+                        se_dir = cache_dir / "speaker_embeddings"
+                        if se_dir.exists():
+                            dst_dir = local_bark_dir / "speaker_embeddings"
+                            if not dst_dir.exists():
+                                try:
+                                    shutil.copytree(se_dir, dst_dir)
+                                    files_copied += 1
+                                except Exception as e:
+                                    logger.debug(f"Skip copying speaker_embeddings: {e}")
+                if files_copied > 0:
+                    logger.info(f"📁 Mirrored {files_copied} Bark files from cache to {local_bark_dir}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not mirror Bark cache: {e}")
+
+            # Ensure core/aux Bark components are present
+            try:
+                download_additional_bark_components(local_bark_dir)
+            except Exception as e:
+                logger.warning(f"⚠️ Could not ensure additional Bark components: {e}")
+
             # Download preset audios
             download_bark_preset_audios()
             
@@ -1026,7 +1071,24 @@ def download_bark_models() -> bool:
             if embeddings_dir.exists():
                 cleanup_non_english_embeddings(embeddings_dir)
             
-            logger.info("✅ Bark models setup completed")
+            # Verify presence of core files and report
+            core_files = ["text_2.pt", "coarse.pt", "fine.pt", "config.json", "tokenizer.json", "vocab.txt"]
+            missing = [f for f in core_files if not (local_bark_dir / f).exists()]
+            if missing:
+                logger.warning(f"⚠️ Bark: Missing expected files after setup: {missing}")
+                logger.info("🔁 Attempting direct fetch of missing files from Hugging Face...")
+                try:
+                    from huggingface_hub import hf_hub_download
+                    for component in missing:
+                        try:
+                            hf_hub_download(repo_id="suno/bark", filename=component, local_dir=str(local_bark_dir), local_dir_use_symlinks=False)
+                            logger.info(f"✅ Fetched {component}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Could not fetch {component}: {e}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not import huggingface_hub for direct fetch: {e}")
+            else:
+                logger.info("✅ Bark models setup completed (core files present)")
             return True
         else:
             logger.error("❌ Bark models directory not found after download")

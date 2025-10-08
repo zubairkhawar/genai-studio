@@ -155,7 +155,10 @@ export default function Page() {
       current_model: '',
       status: 'downloading',
       message: force ? 'Force re-downloading all models...' : 'Starting download...',
-      error: null
+      error: null,
+      download_queue: [],
+      currently_downloading: null,
+      models: {}
     });
     
     try {
@@ -200,7 +203,10 @@ export default function Page() {
                   ...prev,
                   status: 'completed',
                   message: data.message,
-                  is_downloading: false
+                  is_downloading: false,
+                  download_queue: prev.download_queue || [],
+                  currently_downloading: null,
+                  models: prev.models || {}
                 }));
               
               // Load models after download completion
@@ -214,6 +220,15 @@ export default function Page() {
                 } catch (loadError) {
                   console.error('Failed to load models:', loadError);
                 }
+
+              // Trigger voice preview generation so audio presets are available
+              try {
+                console.log('[Settings] Triggering voice preview generation...');
+                const resp = await fetch(getApiUrl('/generate-voice-previews'), { method: 'POST' });
+                console.log('[Settings] Voice preview generation requested. ok =', resp.ok);
+              } catch (e) {
+                console.warn('[Settings] Failed to request voice preview generation:', e);
+              }
                 
                 // Refresh models list
                 fetchModels();
@@ -266,11 +281,17 @@ export default function Page() {
         ...(prev.models || {}),
         [nextModel]: {
           ...(prev.models?.[nextModel] || {}),
+          name: nextModel,
           status: 'downloading',
           progress: 0,
-          downloaded_mb: 0
+          downloaded_mb: 0,
+          repo_id: prev.models?.[nextModel]?.repo_id,
+          local_dir: prev.models?.[nextModel]?.local_dir,
+          size_gb: prev.models?.[nextModel]?.size_gb,
+          eta_seconds: prev.models?.[nextModel]?.eta_seconds,
+          files_verified: prev.models?.[nextModel]?.files_verified
         }
-      }
+      } as typeof prev.models
     }));
     
     try {
@@ -326,7 +347,7 @@ export default function Page() {
                       eta_seconds: prev.models?.[nextModel]?.eta_seconds,
                       files_verified: prev.models?.[nextModel]?.files_verified
                     }
-                  }
+                  } as typeof prev.models
                 }));
               } else if (data.type === 'log') {
                 // Update message with log content
@@ -359,7 +380,7 @@ export default function Page() {
                     message: data.message,
                     is_downloading: anyActive,
                     currently_downloading: null,
-                    models: updatedModels
+                    models: updatedModels as typeof prev.models
                   };
                 });
                 
@@ -393,7 +414,7 @@ export default function Page() {
                     error: data.message,
                     is_downloading: anyActive,
                     currently_downloading: null,
-                    models: updatedModels
+                    models: updatedModels as typeof prev.models
                   };
                 });
                 
@@ -842,10 +863,17 @@ export default function Page() {
                                     models: {
                                       ...(prev.models || {}),
                                       [normId]: {
-                                        ...(prev.models?.[normId] || {}),
-                                        status: 'pending'
+                                        name: normId,
+                                        repo_id: prev.models?.[normId]?.repo_id,
+                                        local_dir: prev.models?.[normId]?.local_dir,
+                                        size_gb: prev.models?.[normId]?.size_gb,
+                                        status: 'pending',
+                                        progress: prev.models?.[normId]?.progress ?? 0,
+                                        downloaded_mb: prev.models?.[normId]?.downloaded_mb ?? 0,
+                                        eta_seconds: prev.models?.[normId]?.eta_seconds,
+                                        files_verified: prev.models?.[normId]?.files_verified
                                       }
-                                    }
+                                    } as typeof prev.models
                                   }));
                                 }}
                                 className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"

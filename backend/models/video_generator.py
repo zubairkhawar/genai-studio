@@ -275,16 +275,19 @@ class VideoGenerator:
     
     def _get_model_path(self, model_id: str) -> pathlib.Path:
         """Get the file path for a model"""
+        # Get project root (parent of backend directory)
+        project_root = pathlib.Path(__file__).parent.parent.parent
+        
         if model_id == "animatediff":
-            return pathlib.Path("models/video/animatediff")
+            return project_root / "models/video/animatediff"
         elif model_id == "stablesr":
-            return pathlib.Path("models/upscaling/stablesr")
+            return project_root / "models/upscaling/stablesr"
         elif model_id == "realesrgan":
-            return pathlib.Path("models/upscaling/realesrgan")
+            return project_root / "models/upscaling/realesrgan"
         elif model_id == "film":
-            return pathlib.Path("models/interpolation/film")
+            return project_root / "models/interpolation/film"
         else:
-            return pathlib.Path(f"models/video/{model_id}")
+            return project_root / f"models/video/{model_id}"
     
     def _calculate_model_size(self, model_id: str, model_path: pathlib.Path) -> float:
         """Calculate the size of a model in GB"""
@@ -331,7 +334,7 @@ class VideoGenerator:
             elif model_name == "stable-video-diffusion":
                 return await self._generate_with_pipeline(prompt, duration, output_format, image_input, progress_callback, **kwargs)
             else:
-                raise ValueError(f"Unsupported model: {model_name}. Supported models: enhanced-pipeline, animatediff, stable-diffusion, stable-video-diffusion")
+                raise ValueError(f"Unsupported model: {model_name}. Supported models: ultimate-pipeline, animatediff, stable-diffusion, stable-video-diffusion")
                 
         except Exception as e:
             raise RuntimeError(f"Video generation failed: {e}")
