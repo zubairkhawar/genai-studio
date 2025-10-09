@@ -374,6 +374,9 @@ class AnimateDiffGenerator:
         num_inference_steps: Optional[int] = None,
         guidance_scale: Optional[float] = None,
         motion_scale: Optional[float] = None,
+        context_frames: Optional[int] = None,
+        sampler: Optional[str] = None,
+        scheduler: Optional[str] = None,
         seed: Optional[int] = None,
         output_format: str = "mp4",
         progress_callback: Optional[Callable[[int, str], None]] = None
@@ -393,6 +396,42 @@ class AnimateDiffGenerator:
             motion_scale = motion_scale or self.config["motion_scale"]
             seed = seed or 42
             
+            # Optional temporal context (best-effort; some backends ignore it)
+            if context_frames is not None:
+                try:
+                    # Some AnimateDiff variants expose context_frames on the pipeline
+                    if hasattr(self.pipeline, "context_frames"):
+                        setattr(self.pipeline, "context_frames", int(context_frames))
+                        logger.info(f"Using context_frames={context_frames}")
+                except Exception as e:
+                    logger.warning(f"Could not set context_frames: {e}")
+
+            # Optional sampler/scheduler selection
+            try:
+                desired = (sampler or scheduler or "").lower()
+                if desired:
+                    from diffusers import (
+                        DDIMScheduler,
+                        DPMSolverMultistepScheduler,
+                        EulerAncestralDiscreteScheduler,
+                        DPMSolverSinglestepScheduler,
+                    )
+                    if "ddim" in desired:
+                        self.pipeline.scheduler = DDIMScheduler.from_config(self.pipeline.scheduler.config)
+                        logger.info("Scheduler set to DDIM")
+                    elif "dpmpp" in desired or "dpm" in desired:
+                        # Use DPMSolver multistep by default for dpmpp_* samplers
+                        self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config)
+                        logger.info("Scheduler set to DPMSolverMultistep")
+                    elif "euler_a" in desired or "euler-a" in desired:
+                        self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(self.pipeline.scheduler.config)
+                        logger.info("Scheduler set to Euler Ancestral")
+                    elif "dpm_single" in desired:
+                        self.pipeline.scheduler = DPMSolverSinglestepScheduler.from_config(self.pipeline.scheduler.config)
+                        logger.info("Scheduler set to DPMSolverSingleStep")
+            except Exception as e:
+                logger.warning(f"Could not switch scheduler: {e}")
+
             # Log hardware-optimized settings
             logger.info(f"Using hardware-optimized settings:")
             logger.info(f"  Resolution: {width}x{height}")
@@ -422,36 +461,53 @@ class AnimateDiffGenerator:
             if progress_callback:
                 progress_callback(30, "Generating video frames...")
             
+            # Prepare optional init latents from SD keyframe
+            init_latents = None
+            if init_image is not None:
+                try:
+                    logger.info("Encoding init_image into VAE latents for AnimateDiff start state")
+                    img = init_image.convert("RGB").resize((width, height), Image.BICUBIC)
+                    img_tensor = torch.from_numpy(np.array(img)).float()  # HWC, 0..255
+                    img_tensor = img_tensor.permute(2, 0, 1)[None, ...] / 255.0  # BCHW, 0..1
+                    img_tensor = (img_tensor * 2.0 - 1.0).to(self.device, dtype=self.dtype)
+                    with torch.no_grad():
+                        moments = self.pipeline.vae.encode(img_tensor)
+                        if hasattr(moments, "latent_dist"):
+                            latents = moments.latent_dist.sample()
+                        else:
+                            latents = moments.sample()
+                        # Prepare init latents for AnimateDiff
+                        latents = latents * 0.18215  # [1, C, H, W]
+                        # AnimateDiff expects [B, C, F, H, W] before its internal permute
+                        init_latents = latents.unsqueeze(2).repeat(1, 1, num_frames, 1, 1)  # [1, C, F, H, W]
+                        # Ensure dtype matches UNet exactly (e.g., float32 on MPS)
+                        init_latents = init_latents.to(dtype=self.pipeline.unet.dtype)
+                except Exception as e:
+                    logger.warning(f"Failed to encode init_image to latents: {e}")
+
             # Generate video using AnimateDiff pipeline
             generator = torch.Generator(device=self.device).manual_seed(seed)
-            
+            call_kwargs = dict(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                width=width,
+                height=height,
+                num_frames=num_frames,
+                num_inference_steps=num_inference_steps,
+                guidance_scale=guidance_scale,
+                motion_scale=motion_scale,
+                generator=generator,
+            )
+            # Pass prepared latents to AnimateDiff when available
+            if init_latents is not None:
+                call_kwargs["latents"] = init_latents
+
             # Use proper autocast for the device
             if self.device == "mps":
-                # For MPS, use CPU autocast or no autocast
-                result = self.pipeline(
-                    prompt=prompt,
-                    negative_prompt=negative_prompt,
-                    width=width,
-                    height=height,
-                    num_frames=num_frames,
-                    num_inference_steps=num_inference_steps,
-                    guidance_scale=guidance_scale,
-                    motion_scale=motion_scale,
-                    generator=generator
-                )
+                result = self.pipeline(**call_kwargs)
             else:
                 with torch.autocast(self.device):
-                    result = self.pipeline(
-                        prompt=prompt,
-                        negative_prompt=negative_prompt,
-                        width=width,
-                        height=height,
-                        num_frames=num_frames,
-                        num_inference_steps=num_inference_steps,
-                        guidance_scale=guidance_scale,
-                        motion_scale=motion_scale,
-                        generator=generator
-                    )
+                    result = self.pipeline(**call_kwargs)
             
             if progress_callback:
                 progress_callback(80, "Processing video frames...")
@@ -459,15 +515,7 @@ class AnimateDiffGenerator:
             # Convert frames to video
             frames = result.frames[0]  # Get the first (and only) video
 
-            # If an init_image (SD keyframe) is provided, just use it as the first frame
-            try:
-                if init_image is not None and isinstance(init_image, Image.Image):
-                    base = init_image.resize((width, height), Image.BICUBIC)
-                    # Simply replace the first frame with the SD keyframe
-                    frames[0] = base
-                    logger.info("Applied SD keyframe as first frame only - letting AnimateDiff handle motion")
-            except Exception as e:
-                logger.warning(f"Could not apply init_image: {e}")
+            # Do not overlay/replace frames when using latent init; let AnimateDiff handle motion
             
             # Post-process frames for better consistency (can be disabled for testing)
             if self.config.get("enable_post_processing", True):
