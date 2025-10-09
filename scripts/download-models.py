@@ -92,16 +92,6 @@ MODELS = {
                 "description": "Anime-focused 4x upscaling model"
             }
         ]
-    },
-    "film": {
-        "name": "FILM Frame Interpolation",
-        "repo_id": "github/google-research/frame-interpolation",
-        "local_dir": str(config.get_model_path("interpolation", "film")),
-        "size_gb": 0.3,  # ~300MB for complete repo
-        "priority": 5,
-        "description": "Google FILM for frame interpolation",
-        "download_type": "git_clone",
-        "git_url": "https://github.com/google-research/frame-interpolation.git"
     }
 }
 
@@ -1475,32 +1465,6 @@ def verify_model_integrity(model_id: str) -> bool:
         
         logger.info(f"✅ {config['name']}: Found {len(model_files)} model files")
         logger.info(f"📁 Models: {found_models}")
-
-    elif model_id == "film":
-        # Check for FILM repository files
-        python_files = list(local_dir.rglob("*.py"))
-        readme_files = list(local_dir.rglob("README.md"))
-        
-        if len(python_files) == 0:
-            logger.warning(f"⚠️ {config['name']}: No Python files found")
-            return False
-        
-        # Check for key FILM files (more flexible)
-        expected_files = ["predict.py", "model_lib.py", "eval_lib.py"]
-        found_files = [f.name for f in python_files]
-        found_expected = [f for f in expected_files if f in found_files]
-        
-        if len(found_expected) == 0:
-            logger.warning(f"⚠️ {config['name']}: No expected FILM files found")
-        else:
-            logger.info(f"✅ {config['name']}: Found expected files: {found_expected}")
-        
-        logger.info(f"✅ {config['name']}: Found {len(python_files)} Python files")
-        if readme_files:
-            logger.info(f"📖 Documentation available: {readme_files[0].name}")
-        
-        # FILM doesn't need weight files - it uses TensorFlow Hub
-        return True
 
     # Must have at least one weight file (for non-direct URL models, except FILM)
     if (config.get("download_type") != "direct_url" and 
