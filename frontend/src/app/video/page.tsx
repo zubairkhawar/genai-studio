@@ -322,7 +322,6 @@ export default function Page() {
                             onChange={(e) => setSettings(prev => ({ ...prev, width: parseInt(e.target.value) }))}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                           >
-                            <option value={256}>256px</option>
                             <option value={384}>384px</option>
                             <option value={512}>512px</option>
                             <option value={768}>768px</option>
@@ -336,7 +335,6 @@ export default function Page() {
                             onChange={(e) => setSettings(prev => ({ ...prev, height: parseInt(e.target.value) }))}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                           >
-                            <option value={256}>256px</option>
                             <option value={384}>384px</option>
                             <option value={512}>512px</option>
                             <option value={768}>768px</option>
