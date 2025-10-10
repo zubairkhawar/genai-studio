@@ -453,9 +453,8 @@ export default function Page() {
     
     if (model?.grouped_models && model.grouped_models.length > 0) {
       confirmMessage += `This will delete the entire Enhanced Video Pipeline including:\n`;
-      confirmMessage += `• AnimateDiff\n`;
-      confirmMessage += `• RealESRGAN\n`;
-      confirmMessage += `• FILM Frame Interpolation\n\n`;
+      confirmMessage += `• Stable Video Diffusion\n`;
+      confirmMessage += `• RealESRGAN\n\n`;
     }
     
     confirmMessage += `This will free up storage space but you'll need to download it again to use it.\n\n`;
@@ -953,7 +952,7 @@ export default function Page() {
               <p className={`text-sm ${colors.text.secondary} mt-1`}>
                 {models.video_models.length > 0 || models.audio_models.length > 0 || (models.image_models && models.image_models.length > 0) 
                   ? "Models are downloaded and ready to use. Delete them to free up space."
-                  : "Download AnimateDiff, Stable Diffusion, and Bark models (~51GB total) with resume capability"
+                  : "Download Stable Video Diffusion, Stable Diffusion, and Bark models (~54GB total) with resume capability"
                 }
               </p>
             </div>

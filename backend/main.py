@@ -17,7 +17,7 @@ import queue
 import subprocess
 import threading
 
-from models.video_generator import VideoGenerator
+from models.ultimate_video_generator import UltimateVideoGenerator
 from models.audio_generator import AudioGenerator
 from models.image_generator import ImageGenerator
 from utils.gpu_detector import GPUDetector
@@ -82,11 +82,11 @@ download_status = {
             "eta_seconds": 0,
             "files_verified": False
         },
-        "animatediff": {
-            "name": "AnimateDiff Official Repository",
-            "repo_id": "guoyww/AnimateDiff",
-            "local_dir": "../models/video/animatediff",
-            "size_gb": 7.0,
+        "svd": {
+            "name": "Stable Video Diffusion",
+            "repo_id": "stabilityai/stable-video-diffusion-img2vid-xt",
+            "local_dir": "../models/video/svd",
+            "size_gb": 5.0,
             "status": "pending",
             "progress": 0,
             "downloaded_mb": 0,
@@ -123,8 +123,7 @@ class GenerationRequest(BaseModel):
     voice_style: Optional[str] = "auto"  # for audio voice selection
     voice_id: Optional[str] = None  # specific Bark voice ID
     # Advanced video settings
-    width: Optional[int] = None
-    height: Optional[int] = None
+    resolution: Optional[int] = 512  # 256, 384, or 512
     num_frames: Optional[int] = None
     num_inference_steps: Optional[int] = None
     guidance_scale: Optional[float] = None
@@ -173,7 +172,7 @@ def check_existing_models():
                         "downloaded_mb": size_mb,
                         "files_verified": True
                     })
-                    print(f"✅ Bark models found in cache ({size_mb:.1f} MB)")
+                    print(f"✅ Bark models found in cache")
                     bark_available = True
             
             # Also check local directory for complete Bark setup
@@ -196,10 +195,13 @@ def check_existing_models():
             # Check for actual model weight files
             weight_files = list(local_dir.rglob("*.safetensors")) + list(local_dir.rglob("*.bin")) + list(local_dir.rglob("*.pt")) + list(local_dir.rglob("*.pth"))
             
-            # Special check for AnimateDiff - ensure we have both main model and motion adapter files
-            if model_key == "animatediff":
-                motion_adapter_files = list(local_dir.rglob("*motion*")) + list(local_dir.rglob("*adapter*"))
-                if len(weight_files) > 0 and len(motion_adapter_files) > 0:
+            # Special check for SVD - ensure we have all required model files
+            if model_key == "svd":
+                # Check for specific SVD model files
+                required_files = ["model_index.json", "unet/diffusion_pytorch_model.safetensors", "vae/diffusion_pytorch_model.safetensors"]
+                has_required = all((local_dir / file).exists() for file in required_files)
+                
+                if len(weight_files) > 0 and has_required:
                     # Calculate total size
                     total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
                     size_mb = total_size / (1024 * 1024)
@@ -210,16 +212,16 @@ def check_existing_models():
                         "downloaded_mb": size_mb,
                         "files_verified": True
                     })
-                    print(f"✅ {model_info['name']} already downloaded ({size_mb:.1f} MB)")
+                    print(f"✅ {model_info['name']} already downloaded")
                 else:
-                    # Missing motion adapter files
+                    # Missing required files
                     download_status["models"][model_key].update({
                         "status": "pending",
                         "progress": 0,
                         "downloaded_mb": 0,
                         "files_verified": False
                     })
-                    print(f"⚠️  {model_info['name']} found but motion adapter files missing - will re-download")
+                    print(f"⚠️  {model_info['name']} found but required files missing - will re-download")
             elif len(weight_files) > 0:
                 # Calculate total size
                 total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
@@ -231,7 +233,7 @@ def check_existing_models():
                     "downloaded_mb": size_mb,
                     "files_verified": True
                 })
-                print(f"✅ {model_info['name']} already downloaded ({size_mb:.1f} MB)")
+                print(f"✅ {model_info['name']} already downloaded")
             else:
                 # Directory exists but no model files - mark as pending
                 download_status["models"][model_key].update({
@@ -300,7 +302,7 @@ def safe_snapshot_download(model_id: str, local_dir: str, model_key: str):
             "files_verified": True
         })
         
-        print(f"✅ Successfully downloaded {model_id} ({size_mb:.1f} MB)")
+        print(f"✅ Successfully downloaded {model_id}")
         
     except Exception as e:
         download_status["models"][model_key]["status"] = "error"
@@ -339,7 +341,7 @@ def download_bark_models():
                     "downloaded_mb": size_mb,
                     "files_verified": True
                 })
-                print(f"✅ Bark models ready ({size_mb:.1f} MB)")
+                print(f"✅ Bark models ready")
             else:
                 raise Exception("Bark cache not found after preload")
                 
@@ -464,7 +466,7 @@ async def startup_event():
     print(f"Detected GPU: {gpu_info}")
     
     # Initialize generators (but don't load models yet)
-    video_generator = VideoGenerator(gpu_info)
+    video_generator = UltimateVideoGenerator(gpu_info)
     audio_generator = AudioGenerator(gpu_info)
     image_generator = ImageGenerator(gpu_info)
     
@@ -786,7 +788,7 @@ async def get_available_models():
     # Initialize generators if they don't exist
     if not video_generator or not audio_generator or not image_generator:
         gpu_info = gpu_detector.detect_gpu()
-        video_generator = VideoGenerator(gpu_info)
+        video_generator = UltimateVideoGenerator(gpu_info)
         audio_generator = AudioGenerator(gpu_info)
         image_generator = ImageGenerator(gpu_info)
     
@@ -819,10 +821,8 @@ async def generate_media(request: GenerationRequest, background_tasks: Backgroun
         
         # Add advanced video settings if provided
         if request.model_type == "video":
-            if request.width is not None:
-                job_data["width"] = request.width
-            if request.height is not None:
-                job_data["height"] = request.height
+            if request.resolution is not None:
+                job_data["resolution"] = request.resolution
             if request.num_frames is not None:
                 job_data["num_frames"] = request.num_frames
             if request.num_inference_steps is not None:
@@ -840,6 +840,7 @@ async def generate_media(request: GenerationRequest, background_tasks: Backgroun
         
         # Start background generation
         if request.model_type == "video":
+            # Always use SD + SVD pipeline for video generation
             background_tasks.add_task(generate_video, job_id, request)
         elif request.model_type == "audio":
             background_tasks.add_task(generate_audio, job_id, request)
@@ -1239,9 +1240,8 @@ async def delete_model(model_name: str):
         # Define model paths
         model_paths = {
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),
-            "animatediff": pathlib.Path("../models/video/animatediff"),
+            "svd": pathlib.Path("../models/video/svd"),
             "realesrgan": pathlib.Path("../models/upscaling/realesrgan"),
-            "film": pathlib.Path("../models/interpolation/film"),
             "enhanced-pipeline": None,  # Special case - will handle grouped deletion
             # Bark stores in cache; also keep a local mirror under ../models/audio/bark
             "bark": pathlib.Path.home() / ".cache" / "suno" / "bark_v0"
@@ -1249,9 +1249,8 @@ async def delete_model(model_name: str):
         # Map API names to unified download status keys
         name_to_status_key = {
             "stable-diffusion": "stable_diffusion",
-            "animatediff": "animatediff",
+            "svd": "svd",
             "realesrgan": "realesrgan",
-            "film": "film",
             "enhanced-pipeline": "enhanced_pipeline",
             "bark": "bark",
         }
@@ -1263,7 +1262,7 @@ async def delete_model(model_name: str):
         # Handle enhanced-pipeline deletion (delete all grouped models)
         if model_name == "enhanced-pipeline":
             deleted_models = []
-            enhanced_pipeline_models = ["animatediff", "realesrgan", "film"]
+            enhanced_pipeline_models = ["svd", "realesrgan"]
             total_size_gb = 0
             
             for sub_model in enhanced_pipeline_models:
@@ -1405,7 +1404,7 @@ def restart_models():
     try:
         # Reinitialize generators
         gpu_info = gpu_detector.detect_gpu()
-        video_generator = VideoGenerator(gpu_info)
+        video_generator = UltimateVideoGenerator(gpu_info)
         audio_generator = AudioGenerator(gpu_info)
         
         # Load models
@@ -1669,9 +1668,8 @@ async def delete_models():
         # List of model directories to delete
         model_dirs = [
             ('image', 'stable-diffusion'), 
-            ('video', 'animatediff'),
+            ('video', 'svd'),
             ('upscaling', 'realesrgan'),
-            ('interpolation', 'film'),
             ('audio', 'bark'),
             ('', 'huggingface')  # Common cache directory
         ]
@@ -1791,20 +1789,17 @@ async def generate_video(job_id: str, request: GenerationRequest):
         def progress_callback(progress: int, message: str = ""):
             job_queue.update_job(job_id, {"progress": progress, "message": message})
         
-        # Prepare generation parameters
+        # Prepare generation parameters - always use SD + SVD pipeline
         generation_params = {
             "prompt": request.prompt,
-            "model_name": request.model_name,
-            "duration": request.duration,
+            "preset": "balanced",  # Use balanced preset for SD + SVD pipeline
             "output_format": request.output_format,
             "progress_callback": progress_callback
         }
         
         # Add advanced settings if provided
-        if request.width is not None:
-            generation_params["width"] = request.width
-        if request.height is not None:
-            generation_params["height"] = request.height
+        if request.resolution is not None:
+            generation_params["resolution"] = request.resolution
         if request.num_frames is not None:
             generation_params["num_frames"] = request.num_frames
         if request.num_inference_steps is not None:
@@ -1876,16 +1871,15 @@ async def generate_image_task(job_id: str, request: GenerationRequest):
             image_generator = ImageGenerator(gpu_info)
         
         # Extract image generation parameters
-        width = request.width if request.width is not None else 1024
-        height = request.height if request.height is not None else 1024
+        resolution = request.resolution if request.resolution is not None else 512
         num_inference_steps = request.num_inference_steps if request.num_inference_steps is not None else 50
         guidance_scale = request.guidance_scale if request.guidance_scale is not None else 9.0
         
         output_path = await image_generator.generate_image(
             prompt=request.prompt,
             model_name=request.model_name,
-            width=width,
-            height=height,
+            width=resolution,
+            height=resolution,
             num_inference_steps=num_inference_steps,
             guidance_scale=guidance_scale,
             progress_callback=progress_callback

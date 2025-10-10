@@ -2,7 +2,7 @@
 """
 Comprehensive Model Download Script
 This script downloads all the recommended models for the text-to-media application:
-- AnimateDiff (for GIF generation)
+- Stable Video Diffusion (for video generation)
 - Stable Diffusion (for text-to-image generation)
 - Bark (for text-to-speech)
 """
@@ -38,38 +38,30 @@ MODELS = {
         "local_dir": str(config.get_model_path("image", "stable-diffusion")),
         "size_gb": 44.0,
         "priority": 1,  # High priority - base model
-        "description": "Text-to-image generation (base model for AnimateDiff)"
+        "description": "Text-to-image generation (base model for SVD)"
     },
     "stablesr": {
         "name": "Stable Diffusion x4 Upscaler (StableSR stage)",
         "repo_id": "stabilityai/stable-diffusion-x4-upscaler",
         "local_dir": str(config.get_model_path("upscaling", "stablesr")),
         "size_gb": 7.0,
-        "priority": 4,
+        "priority": 3,  # Priority 3 - enhancement models
         "description": "Mandatory upscaler used as StableSR denoise/refine backend",
     },
-    "animatediff": {
-        "name": "AnimateDiff Official Repository",
-        "repo_id": "guoyww/AnimateDiff",
-        "local_dir": str(config.get_model_path("video", "animatediff")),
+    "svd": {
+        "name": "Stable Video Diffusion",
+        "repo_id": "stabilityai/stable-video-diffusion-img2vid-xt",
+        "local_dir": str(config.get_model_path("video", "svd")),
         "size_gb": 5.0,
-        "priority": 3,
-        "description": "Official AnimateDiff repository with motion adapters and configs"
-    },
-    "animatediff_motion_adapter": {
-        "name": "AnimateDiff Motion Adapter v1.5.2",
-        "repo_id": "guoyww/animatediff-motion-adapter-v1-5-2",
-        "local_dir": str(config.get_model_path("video", "animatediff") / "motion_adapter"),
-        "size_gb": 2.0,
-        "priority": 3,
-        "description": "Motion adapter for AnimateDiff v1.5.2"
+        "priority": 2,  # Priority 2 - video generation
+        "description": "Stable Video Diffusion for image-to-video generation"
     },
     "bark": {
         "name": "Bark",
         "repo_id": "suno/bark",
         "local_dir": str(config.get_model_path("audio", "bark")),
         "size_gb": 5.0,
-        "priority": 2,  # High priority - primary TTS model
+        "priority": 4,  # Priority 4 - TTS model (lowest priority)
         "description": "Text-to-speech generation"
     },
     "realesrgan": {
@@ -77,7 +69,7 @@ MODELS = {
         "repo_id": "github/xinntao/Real-ESRGAN",
         "local_dir": str(config.get_model_path("upscaling", "realesrgan")),
         "size_gb": 0.2,  # ~200MB for models
-        "priority": 4,
+        "priority": 3,  # Priority 3 - enhancement models
         "description": "RealESRGAN models for spatial super-resolution",
         "download_type": "direct_models",
         "models": [
@@ -1089,63 +1081,56 @@ def download_bark_models() -> bool:
         logger.info("📝 Bark models will be loaded on first use")
         return False
 
-def download_animatediff_models() -> bool:
-    """Special handling for AnimateDiff models following official repository structure"""
+def download_svd_models() -> bool:
+    """Special handling for SVD models following official repository structure"""
     try:
-        logger.info("🎬 Setting up AnimateDiff models...")
+        logger.info("🎬 Setting up Stable Video Diffusion models...")
         
-        # Download the official AnimateDiff repository
-        logger.info("📥 Downloading AnimateDiff official repository...")
-        repo_success = download_model("animatediff")
-        if not repo_success:
-            logger.error("❌ Failed to download AnimateDiff repository")
-            return False
-
-        # Download the motion adapter separately
-        logger.info("📥 Downloading AnimateDiff motion adapter...")
-        adapter_success = download_model("animatediff_motion_adapter")
-        if not adapter_success:
-            logger.error("❌ Failed to download AnimateDiff motion adapter")
+        # Download the SVD repository
+        logger.info("📥 Downloading Stable Video Diffusion repository...")
+        svd_success = download_model("svd")
+        if not svd_success:
+            logger.error("❌ Failed to download SVD repository")
             return False
 
         # Verify the setup
-        animatediff_dir = pathlib.Path("../models/video/animatediff")
-        motion_adapter_dir = pathlib.Path("../models/video/animatediff/motion_adapter")
+        svd_dir = pathlib.Path("../models/video/svd")
 
-        # Check for essential files in the main repository
+        # Check for essential files
         essential_files = [
-            "config.json",
-            "README.md"
+            "model_index.json",
+            "unet/diffusion_pytorch_model.safetensors",
+            "vae/diffusion_pytorch_model.safetensors",
+            "scheduler/scheduler_config.json",
+            "text_encoder/model.safetensors",
+            "tokenizer/vocab.json",
+            "tokenizer/merges.txt",
+            "tokenizer/tokenizer_config.json",
+            "feature_extractor/preprocessor_config.json"
         ]
         
         missing_files = []
         for file_path in essential_files:
-            if not (animatediff_dir / file_path).exists():
+            if not (svd_dir / file_path).exists():
                 missing_files.append(file_path)
 
         if missing_files:
             logger.warning(f"⚠️ Missing essential files: {missing_files}")
             return False
 
-        # Check motion adapter files
-        adapter_files = list(motion_adapter_dir.rglob("*.safetensors")) + list(motion_adapter_dir.rglob("*.bin"))
-        if len(adapter_files) == 0:
-            logger.error("❌ No motion adapter weight files found")
+        # Check for weight files
+        weight_files = list(svd_dir.rglob("*.safetensors")) + list(svd_dir.rglob("*.bin"))
+        if len(weight_files) == 0:
+            logger.error("❌ No model weight files found")
             return False
 
-        # Check for motion adapter config
-        adapter_config = motion_adapter_dir / "config.json"
-        if not adapter_config.exists():
-            logger.warning("⚠️ Motion adapter config.json not found")
-
-        logger.info("✅ AnimateDiff setup completed successfully")
-        logger.info(f"📁 Repository: {animatediff_dir}")
-        logger.info(f"📁 Motion adapter: {motion_adapter_dir}")
-        logger.info(f"📁 Motion adapter files: {len(adapter_files)} weight files found")
+        logger.info("✅ SVD setup completed successfully")
+        logger.info(f"📁 Repository: {svd_dir}")
+        logger.info(f"📁 Model files: {len(weight_files)} weight files found")
         return True
 
     except Exception as e:
-        logger.error(f"❌ AnimateDiff setup failed: {e}")
+        logger.error(f"❌ SVD setup failed: {e}")
         return False
 
 def verify_model_integrity(model_id: str) -> bool:
@@ -1349,41 +1334,48 @@ def verify_model_integrity(model_id: str) -> bool:
                 logger.error(f"❌ Failed to fix missing Stable Diffusion components: {e}")
                 return False
 
-    elif model_id == "animatediff":
-        # Check for AnimateDiff specific files (config.json is optional)
-        required_files = [
-            "README.md"
+    elif model_id == "svd":
+        # Check for SVD essential files (more lenient verification)
+        essential_files = [
+            "model_index.json",
+            "unet/diffusion_pytorch_model.safetensors",
+            "vae/diffusion_pytorch_model.safetensors"
         ]
         
-        missing_files = []
-        for req_file in required_files:
+        missing_essential = []
+        for req_file in essential_files:
             if not (local_dir / req_file).exists():
-                missing_files.append(req_file)
+                missing_essential.append(req_file)
         
-        # Check for config.json (optional - may not exist in some AnimateDiff repos)
-        if not (local_dir / "config.json").exists():
-            logger.info(f"ℹ️ {config['name']}: No config.json found (this is normal for some AnimateDiff repositories)")
-
-        # Check for motion adapter directory and files
-        motion_adapter_dir = local_dir / "motion_adapter"
-        if not motion_adapter_dir.exists():
-            logger.warning(f"⚠️ {config['name']}: Missing motion_adapter directory")
+        if missing_essential:
+            logger.warning(f"⚠️ {config['name']}: Missing essential files: {missing_essential}")
             return False
 
-        # Check for motion adapter weight files
-        adapter_files = list(motion_adapter_dir.rglob("*.safetensors")) + list(motion_adapter_dir.rglob("*.bin"))
-        if len(adapter_files) == 0:
-            logger.warning(f"⚠️ {config['name']}: No motion adapter weight files found")
+        # Check for model weight files
+        weight_files = list(local_dir.rglob("*.safetensors")) + list(local_dir.rglob("*.bin"))
+        if len(weight_files) == 0:
+            logger.warning(f"⚠️ {config['name']}: No model weight files found")
             return False
 
-        # Check for motion adapter config
-        adapter_config = motion_adapter_dir / "config.json"
-        if not adapter_config.exists():
-            logger.warning(f"⚠️ {config['name']}: Motion adapter config.json not found")
-
-        if missing_files:
-            logger.warning(f"⚠️ {config['name']}: Missing required files: {missing_files}")
-            return False
+        # Check for optional files and warn if missing
+        optional_files = [
+            "scheduler/scheduler_config.json",
+            "text_encoder/model.safetensors",
+            "tokenizer/vocab.json",
+            "tokenizer/merges.txt",
+            "tokenizer/tokenizer_config.json",
+            "feature_extractor/preprocessor_config.json"
+        ]
+        
+        missing_optional = []
+        for opt_file in optional_files:
+            if not (local_dir / opt_file).exists():
+                missing_optional.append(opt_file)
+        
+        if missing_optional:
+            logger.info(f"ℹ️ {config['name']}: Missing optional files (this is normal): {missing_optional}")
+        
+        return True
 
     elif model_id == "bark":
         # Check for core model files (Bark uses different naming)
@@ -1507,9 +1499,9 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
     sorted_models = sorted(MODELS.items(), key=lambda x: x[1]["priority"])
     
     if priority_only:
-        # Only download high-priority models (1-3)
-        sorted_models = [m for m in sorted_models if m[1]["priority"] <= 3]
-        logger.info("📋 Downloading priority models only (AnimateDiff, Kandinsky, XTTS-v2, SD)")
+        # Only download high-priority models (1-4)
+        sorted_models = [m for m in sorted_models if m[1]["priority"] <= 4]
+        logger.info("📋 Downloading priority models only (Stable Diffusion, SVD, StableSR/RealESRGAN, Bark)")
 
     total_models = len(sorted_models)
     completed = 0
@@ -1530,11 +1522,8 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
             try:
                 if model_id == "bark":
                     success = download_bark_models()
-                elif model_id == "animatediff":
-                    success = download_animatediff_models()
-                elif model_id == "animatediff_motion_adapter":
-                    # Skip motion adapter as it's handled by download_animatediff_models
-                    success = True
+                elif model_id == "svd":
+                    success = download_svd_models()
                 elif MODELS[model_id].get("optional"):
                     logger.info(f"⏭️ Skipping optional model {config['name']} (no public repo)")
                     success = True
@@ -1586,7 +1575,7 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
 def main():
     parser = argparse.ArgumentParser(description="Download AI models for text-to-media application")
     parser.add_argument("--all", action="store_true", help="Download all models")
-    parser.add_argument("--priority", action="store_true", help="Download priority models only (AnimateDiff, Kandinsky, XTTS-v2, SD)")
+    parser.add_argument("--priority", action="store_true", help="Download priority models only (Stable Diffusion, SVD, StableSR/RealESRGAN, Bark)")
     parser.add_argument("--model", type=str, help="Download specific model")
     parser.add_argument("--force", action="store_true", help="Force re-download even if model exists")
     parser.add_argument("--list", action="store_true", help="List available models")

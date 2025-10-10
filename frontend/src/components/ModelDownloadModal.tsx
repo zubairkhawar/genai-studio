@@ -218,7 +218,7 @@ export default function ModelDownloadModal({
     // Estimated sizes for models
     const sizeMap: { [key: string]: number } = {
       'stable-diffusion': 4.0,
-      'animatediff': 3.4,
+      'svd': 5.0,
       'bark': 4.0
     };
     return sizeMap[modelId] || 2.0;

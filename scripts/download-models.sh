@@ -181,7 +181,8 @@ case $ACTION in
         download_models "--all $FORCE"
         ;;
     "video")
-        print_info "No video models available (SVD removed)"
+        print_info "Downloading video model..."
+        download_models "--model svd $FORCE"
         ;;
     "image")
         print_info "Downloading image model..."
