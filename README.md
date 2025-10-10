@@ -6,7 +6,6 @@ A comprehensive web application for generating high-quality videos, images, and 
 
 ### 🎬 Video Generation
 - **Stable Video Diffusion (SVD)** - Image-to-video generation
-- **SD + SVD Pipeline** - Text-to-video using Stable Diffusion + SVD
 - **Multiple Resolutions**: 256×256, 384×384, 512×512
 - **Output Formats**: MP4, GIF
 - **Cross-Platform GPU Support**: Optimized for NVIDIA GPUs (6GB-24GB+ VRAM)
@@ -113,8 +112,8 @@ npm run dev
 2. Click **"Download AI Models"**
 3. Select models to download:
    - **Stable Video Diffusion**: 32.61 GB
-   - **Stable Diffusion v1.5**: 44.01 GB
-   - **Bark**: ~4 GB
+   - **Stable Diffusion v1.5**: 47.01 GB
+   - **Bark**: ~15 GB
 
 ### Model Storage
 - Models are stored in `models/` directory
@@ -242,5 +241,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Documentation**: [Wiki](https://github.com/zubairkhawar/genai-studio/wiki)
 
 ---
-
-**Made with ❤️ for the AI community**
