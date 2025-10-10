@@ -86,7 +86,7 @@ download_status = {
             "name": "Stable Video Diffusion",
             "repo_id": "stabilityai/stable-video-diffusion-img2vid-xt",
             "local_dir": "../models/video/svd",
-            "size_gb": 5.0,
+            "size_gb": 32.61,
             "status": "pending",
             "progress": 0,
             "downloaded_mb": 0,
@@ -1237,6 +1237,26 @@ async def delete_model(model_name: str):
     import shutil
     from fastapi import HTTPException as _HTTPException
     try:
+        # Best-effort: unload runtime model before deleting files to release file handles/GPU memory
+        try:
+            global video_generator, audio_generator
+            if model_name == "svd" and video_generator is not None:
+                try:
+                    video_generator.unload_model("svd")
+                except Exception:
+                    pass
+            if model_name == "stable-diffusion":
+                # Image models are managed by ImageGenerator; leave as no-op if not available
+                pass
+            if model_name == "bark" and audio_generator is not None:
+                try:
+                    audio_generator.unload_model("bark")
+                except Exception:
+                    pass
+        except Exception:
+            # Ignore unload failures and proceed with deletion
+            pass
+
         # Define model paths
         model_paths = {
             "stable-diffusion": pathlib.Path("../models/image/stable-diffusion"),

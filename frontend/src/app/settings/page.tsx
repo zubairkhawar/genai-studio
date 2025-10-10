@@ -449,14 +449,7 @@ export default function Page() {
     const allModels = [...models.video_models, ...models.audio_models, ...models.image_models];
     const model = allModels.find(m => m.id === modelName);
     
-    let confirmMessage = `Are you sure you want to delete ${modelName}?\n\n`;
-    
-    if (model?.grouped_models && model.grouped_models.length > 0) {
-      confirmMessage += `This will delete the entire Enhanced Video Pipeline including:\n`;
-      confirmMessage += `• Stable Video Diffusion\n`;
-      confirmMessage += `• RealESRGAN\n\n`;
-    }
-    
+    let confirmMessage = `Are you sure you want to delete ${model?.name || modelName}?\n\n`;
     confirmMessage += `This will free up storage space but you'll need to download it again to use it.\n\n`;
     confirmMessage += `This action cannot be undone.`;
     
@@ -467,6 +460,15 @@ export default function Page() {
     }
     
     try {
+      // Best-effort unload before deleting to avoid file locking (especially for SVD)
+      if (modelType === 'video' && modelName === 'svd') {
+        try {
+          await fetch(getApiUrl(`/models/video/${modelName}/unload`), { method: 'POST' });
+        } catch (e) {
+          // Ignore unload errors and continue
+        }
+      }
+
       const response = await fetch(getApiUrl(`/delete-model/${modelName}`), {
         method: 'DELETE',
       });

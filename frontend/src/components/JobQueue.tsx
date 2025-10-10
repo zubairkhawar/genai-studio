@@ -6,9 +6,6 @@ import {
   CheckCircle, 
   XCircle, 
   Clock, 
-  Download,
-  Trash2,
-  Eye,
   Sparkles,
   Zap
 } from 'lucide-react';
@@ -91,31 +88,6 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
     return new Date(dateString).toLocaleString();
   };
 
-  const handleDownload = async (job: Job) => {
-    if (job.output_file) {
-      const link = document.createElement('a');
-      link.href = `${getApiUrl('')}/outputs/${job.output_file.split('/').pop()}`;
-      link.download = job.output_file.split('/').pop() || 'output';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  const handleCancel = async (jobId: string) => {
-    try {
-      const response = await fetch(getApiUrl(`/job/${jobId}`), {
-        method: 'DELETE',
-      });
-      
-      if (response.ok) {
-        // Job cancelled successfully
-        console.log('Job cancelled');
-      }
-    } catch (err) {
-      console.error('Failed to cancel job:', err);
-    }
-  };
 
   return (
     <div className="h-[600px] overflow-hidden flex flex-col">
@@ -179,10 +151,10 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
             {filteredJobs.map((job, index) => (
               <div
                 key={job.job_id}
-                className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:scale-[1.02] cursor-pointer transition-all duration-300 group ${
+                className={`p-6 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:scale-[1.01] cursor-pointer transition-all duration-300 group shadow-sm hover:shadow-xl ${
                   selectedJob?.job_id === job.job_id 
-                    ? `bg-accent-blue/10 border-accent-blue/50 shadow-glow-blue` 
-                    : 'hover:shadow-lg hover:border-accent-blue/30'
+                    ? `bg-accent-blue/10 border-accent-blue/50 shadow-lg shadow-accent-blue/20` 
+                    : 'hover:shadow-lg hover:border-accent-blue/30 hover:bg-gradient-to-br hover:from-white hover:to-gray-50 dark:hover:from-slate-800 dark:hover:to-slate-700/50'
                 }`}
                 onClick={() => onJobSelect(job)}
                 style={{ animationDelay: `${index * 100}ms` }}
@@ -235,9 +207,9 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                   
                   {/* Prompt Preview */}
                   {job.prompt && (
-                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                      <p className={`text-sm text-gray-900 dark:text-slate-100 line-clamp-2 font-medium`}>
-                        {job.prompt}
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-slate-800 dark:to-slate-700 rounded-xl p-4 border border-gray-200/50 dark:border-slate-600/50">
+                      <p className={`text-sm text-gray-900 dark:text-slate-100 line-clamp-2 font-medium leading-relaxed`}>
+                        "{job.prompt}"
                       </p>
                     </div>
                   )}
@@ -245,57 +217,52 @@ export function JobQueue({ jobs, onJobSelect, selectedJob }: JobQueueProps) {
                   {/* Job Details */}
                   <div className="flex items-center justify-between">
                     <div className={`flex items-center space-x-4 text-xs text-gray-600 dark:text-slate-300`}>
-                      <span className="flex items-center space-x-1">
-                        <Sparkles className="h-3 w-3" />
-                        <span>{job.model_type} • {job.model_name}</span>
+                      <span className="flex items-center space-x-2 bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg">
+                        <Sparkles className="h-3 w-3 text-accent-blue" />
+                        <span className="font-medium">{job.model_type} • {job.model_name}</span>
                       </span>
-                      <span>{formatDate(job.created_at)}</span>
+                      <span className="bg-gray-100 dark:bg-slate-700 px-3 py-1.5 rounded-lg font-medium">
+                        {formatDate(job.created_at)}
+                      </span>
                     </div>
                     
-                    {/* Action Buttons */}
+                    {/* Status Indicator */}
                     <div className="flex items-center space-x-2">
-                      {job.status === 'completed' && job.output_file && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle download
-                          }}
-                          className="p-1.5 text-accent-green hover:bg-accent-green/10 rounded-lg transition-colors"
-                          title="Download"
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
-                      )}
                       {job.status === 'processing' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Handle cancel
-                          }}
-                          className="p-1.5 text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors"
-                          title="Cancel"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center space-x-2 bg-accent-blue/10 px-3 py-1.5 rounded-lg border border-accent-blue/20">
+                          <div className="w-2 h-2 bg-accent-blue rounded-full animate-pulse"></div>
+                          <span className="text-xs text-accent-blue font-semibold">Processing...</span>
+                        </div>
                       )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onJobSelect(job);
-                        }}
-                        className="p-1.5 text-accent-blue hover:bg-accent-blue/10 rounded-lg transition-colors"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
+                      {job.status === 'completed' && (
+                        <div className="flex items-center space-x-2 bg-accent-green/10 px-3 py-1.5 rounded-lg border border-accent-green/20">
+                          <div className="w-2 h-2 bg-accent-green rounded-full"></div>
+                          <span className="text-xs text-accent-green font-semibold">Ready</span>
+                        </div>
+                      )}
+                      {job.status === 'failed' && (
+                        <div className="flex items-center space-x-2 bg-accent-red/10 px-3 py-1.5 rounded-lg border border-accent-red/20">
+                          <div className="w-2 h-2 bg-accent-red rounded-full"></div>
+                          <span className="text-xs text-accent-red font-semibold">Error</span>
+                        </div>
+                      )}
+                      {job.status === 'queued' && (
+                        <div className="flex items-center space-x-2 bg-yellow-500/10 px-3 py-1.5 rounded-lg border border-yellow-500/20">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                          <span className="text-xs text-yellow-600 font-semibold">Queued</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Error Message */}
                   {job.error && (
-                    <div className={`flex items-center space-x-2 p-3 bg-accent-red/10 border border-accent-red/20 rounded-lg`}>
-                      <XCircle className="h-4 w-4 text-accent-red flex-shrink-0" />
-                      <p className="text-sm text-accent-red font-medium">{job.error}</p>
+                    <div className={`flex items-start space-x-3 p-4 bg-gradient-to-r from-accent-red/10 to-red-100/50 dark:from-accent-red/10 dark:to-red-900/20 border border-accent-red/30 rounded-xl shadow-sm`}>
+                      <XCircle className="h-5 w-5 text-accent-red flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm text-accent-red font-semibold mb-1">Generation Failed</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">{job.error}</p>
+                      </div>
                     </div>
                   )}
                 </div>
