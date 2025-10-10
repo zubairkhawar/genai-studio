@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Comprehensive Model Download Script
-This script downloads all the recommended models for the text-to-media application:
-- Stable Video Diffusion (for video generation)
-- Stable Diffusion (for text-to-image generation)
+Essential Model Download Script
+This script downloads only the essential models for the text-to-media application:
+- Stable Diffusion v1.5 (for text-to-image generation)
+- Stable Video Diffusion (for image-to-video generation)
 - Bark (for text-to-speech)
 """
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Initialize configuration
 config = get_config()
 
-# Model configurations
+# Model configurations - Only essential models: SD, SVD, and Bark
 MODELS = {
     "stable_diffusion": {
         "name": "Stable Diffusion v1.5",
@@ -40,50 +40,36 @@ MODELS = {
         "priority": 1,  # High priority - base model
         "description": "Text-to-image generation (base model for SVD)"
     },
-    "stablesr": {
-        "name": "Stable Diffusion x4 Upscaler (StableSR stage)",
-        "repo_id": "stabilityai/stable-diffusion-x4-upscaler",
-        "local_dir": str(config.get_model_path("upscaling", "stablesr")),
-        "size_gb": 7.0,
-        "priority": 3,  # Priority 3 - enhancement models
-        "description": "Mandatory upscaler used as StableSR denoise/refine backend",
-    },
     "svd": {
         "name": "Stable Video Diffusion",
         "repo_id": "stabilityai/stable-video-diffusion-img2vid-xt",
         "local_dir": str(config.get_model_path("video", "svd")),
         "size_gb": 5.0,
         "priority": 2,  # Priority 2 - video generation
-        "description": "Stable Video Diffusion for image-to-video generation"
+        "description": "Stable Video Diffusion for image-to-video generation",
+        "download_type": "huggingface",
+        "include_patterns": [
+            "*.safetensors",
+            "*.bin", 
+            "*.json",
+            "*.txt",
+            "*.yaml",
+            "*.yml",
+            "text_encoder/*",
+            "tokenizer/*",
+            "scheduler/*",
+            "vae/*",
+            "unet/*",
+            "feature_extractor/*"
+        ]
     },
     "bark": {
         "name": "Bark",
         "repo_id": "suno/bark",
         "local_dir": str(config.get_model_path("audio", "bark")),
         "size_gb": 5.0,
-        "priority": 4,  # Priority 4 - TTS model (lowest priority)
+        "priority": 3,  # Priority 3 - TTS model
         "description": "Text-to-speech generation"
-    },
-    "realesrgan": {
-        "name": "RealESRGAN Models",
-        "repo_id": "github/xinntao/Real-ESRGAN",
-        "local_dir": str(config.get_model_path("upscaling", "realesrgan")),
-        "size_gb": 0.2,  # ~200MB for models
-        "priority": 3,  # Priority 3 - enhancement models
-        "description": "RealESRGAN models for spatial super-resolution",
-        "download_type": "direct_models",
-        "models": [
-            {
-                "name": "RealESRGAN_x4plus.pth",
-                "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
-                "description": "General purpose 4x upscaling model"
-            },
-            {
-                "name": "RealESRGAN_x4plus_anime_6B.pth",
-                "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
-                "description": "Anime-focused 4x upscaling model"
-            }
-        ]
     }
 }
 
@@ -1335,11 +1321,17 @@ def verify_model_integrity(model_id: str) -> bool:
                 return False
 
     elif model_id == "svd":
-        # Check for SVD essential files (more lenient verification)
+        # Check for SVD essential files (comprehensive verification)
         essential_files = [
             "model_index.json",
             "unet/diffusion_pytorch_model.safetensors",
-            "vae/diffusion_pytorch_model.safetensors"
+            "vae/diffusion_pytorch_model.safetensors",
+            "scheduler/scheduler_config.json",
+            "text_encoder/model.safetensors",
+            "tokenizer/vocab.json",
+            "tokenizer/merges.txt",
+            "tokenizer/tokenizer_config.json",
+            "feature_extractor/preprocessor_config.json"
         ]
         
         missing_essential = []
@@ -1356,24 +1348,6 @@ def verify_model_integrity(model_id: str) -> bool:
         if len(weight_files) == 0:
             logger.warning(f"⚠️ {config['name']}: No model weight files found")
             return False
-
-        # Check for optional files and warn if missing
-        optional_files = [
-            "scheduler/scheduler_config.json",
-            "text_encoder/model.safetensors",
-            "tokenizer/vocab.json",
-            "tokenizer/merges.txt",
-            "tokenizer/tokenizer_config.json",
-            "feature_extractor/preprocessor_config.json"
-        ]
-        
-        missing_optional = []
-        for opt_file in optional_files:
-            if not (local_dir / opt_file).exists():
-                missing_optional.append(opt_file)
-        
-        if missing_optional:
-            logger.info(f"ℹ️ {config['name']}: Missing optional files (this is normal): {missing_optional}")
         
         return True
 
@@ -1499,9 +1473,9 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
     sorted_models = sorted(MODELS.items(), key=lambda x: x[1]["priority"])
     
     if priority_only:
-        # Only download high-priority models (1-4)
-        sorted_models = [m for m in sorted_models if m[1]["priority"] <= 4]
-        logger.info("📋 Downloading priority models only (Stable Diffusion, SVD, StableSR/RealESRGAN, Bark)")
+        # Only download high-priority models (1-3)
+        sorted_models = [m for m in sorted_models if m[1]["priority"] <= 3]
+        logger.info("📋 Downloading priority models only (Stable Diffusion, SVD, Bark)")
 
     total_models = len(sorted_models)
     completed = 0
@@ -1575,7 +1549,7 @@ def download_all_models(force: bool = False, priority_only: bool = False) -> boo
 def main():
     parser = argparse.ArgumentParser(description="Download AI models for text-to-media application")
     parser.add_argument("--all", action="store_true", help="Download all models")
-    parser.add_argument("--priority", action="store_true", help="Download priority models only (Stable Diffusion, SVD, StableSR/RealESRGAN, Bark)")
+    parser.add_argument("--priority", action="store_true", help="Download priority models only (Stable Diffusion, SVD, Bark)")
     parser.add_argument("--model", type=str, help="Download specific model")
     parser.add_argument("--force", action="store_true", help="Force re-download even if model exists")
     parser.add_argument("--list", action="store_true", help="List available models")
