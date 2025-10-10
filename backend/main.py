@@ -1800,18 +1800,22 @@ async def generate_video(job_id: str, request: GenerationRequest):
         # Add advanced settings if provided
         if request.resolution is not None:
             generation_params["resolution"] = request.resolution
-        if request.num_frames is not None:
-            generation_params["num_frames"] = request.num_frames
-        if request.num_inference_steps is not None:
-            generation_params["num_inference_steps"] = request.num_inference_steps
-        if request.guidance_scale is not None:
-            generation_params["guidance_scale"] = request.guidance_scale
-        if request.motion_scale is not None:
-            generation_params["motion_scale"] = request.motion_scale
-        if request.fps is not None:
-            generation_params["fps"] = request.fps
         if request.seed is not None:
             generation_params["seed"] = request.seed
+        
+        # Create SVD overrides for advanced settings
+        svd_overrides = {}
+        if request.num_frames is not None:
+            svd_overrides["frames"] = request.num_frames
+        if request.num_inference_steps is not None:
+            svd_overrides["steps"] = request.num_inference_steps
+        if request.motion_scale is not None:
+            svd_overrides["motion_bucket_id"] = int(127 * request.motion_scale)
+        if request.fps is not None:
+            svd_overrides["fps"] = request.fps
+        
+        if svd_overrides:
+            generation_params["svd_overrides"] = svd_overrides
         
         output_path = await video_generator.generate(**generation_params)
         

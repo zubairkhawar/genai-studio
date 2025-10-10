@@ -30,10 +30,36 @@ class TextToImageGenerator:
                 requires_safety_checker=False
             ).to(self.device)
 
+            # Apply cross-platform optimizations
             try:
                 self.pipeline.enable_attention_slicing()
+                print("✅ Enabled attention slicing for SD")
             except Exception:
                 pass
+            
+            # CUDA-specific optimizations
+            if self.device == "cuda":
+                import platform
+                os_name = platform.system().lower()
+                memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                
+                print(f"Applying SD optimizations for {memory_gb:.1f}GB GPU on {os_name}")
+                
+                # Memory optimizations for different GPU sizes
+                if memory_gb < 12:  # 8GB and lower GPUs
+                    try:
+                        self.pipeline.enable_cpu_offload()
+                        print("✅ Enabled CPU offload for SD on low-VRAM GPU")
+                    except Exception:
+                        pass
+                
+                # Platform-specific optimizations
+                if os_name == "windows":
+                    torch.cuda.set_per_process_memory_fraction(0.9)
+                    print("✅ Set Windows CUDA memory fraction to 90% for SD")
+                elif os_name == "linux":
+                    torch.cuda.empty_cache()
+                    print("✅ Applied Linux CUDA optimizations for SD")
 
             self.model_path = model_path
             print("✅ Stable Diffusion loaded successfully")
@@ -57,6 +83,18 @@ class TextToImageGenerator:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed(seed)
 
+        # Clear memory before generation
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+            import platform
+            os_name = platform.system().lower()
+            if os_name == "windows":
+                torch.cuda.synchronize()
+                print("✅ Synchronized CUDA on Windows before SD generation")
+            elif os_name == "linux":
+                torch.cuda.empty_cache()
+                print("✅ Applied Linux CUDA memory management before SD generation")
+
         with torch.no_grad():
             result = self.pipeline(
                 prompt=prompt,
@@ -66,6 +104,18 @@ class TextToImageGenerator:
                 guidance_scale=guidance_scale,
                 generator=torch.Generator(self.device).manual_seed(seed) if seed else None
             )
+
+        # Clear memory after generation
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+            import platform
+            os_name = platform.system().lower()
+            if os_name == "windows":
+                torch.cuda.synchronize()
+                print("✅ Synchronized CUDA on Windows after SD generation")
+            elif os_name == "linux":
+                torch.cuda.empty_cache()
+                print("✅ Applied Linux CUDA cleanup after SD generation")
 
         image = result.images[0]
         if not isinstance(image, Image.Image):
