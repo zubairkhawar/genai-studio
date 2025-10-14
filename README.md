@@ -68,6 +68,51 @@ Text Prompt → Stable Diffusion → SVD → FFmpeg → Final Video
 
 ## 🚀 Quick Start
 
+### 🎯 One-Click Setup (Recommended)
+
+**For Mac (Apple Silicon/Intel):**
+```bash
+git clone https://github.com/zubairkhawar/genai-studio.git
+cd genai-studio
+./setup-mac.sh
+./start-mac.sh
+```
+
+**For AMD GPU (Linux/Windows):**
+```bash
+git clone https://github.com/zubairkhawar/genai-studio.git
+cd genai-studio
+./setup-amd.sh
+./start-amd.sh
+```
+
+**For General Linux/Windows:**
+```bash
+git clone https://github.com/zubairkhawar/genai-studio.git
+cd genai-studio
+./setup.sh
+./start.sh
+```
+
+**For Windows (Batch files):**
+```cmd
+git clone https://github.com/zubairkhawar/genai-studio.git
+cd genai-studio
+setup.bat
+start.bat
+```
+
+The setup script will automatically:
+- ✅ Check system requirements (Python 3.8+, Node.js 16+)
+- ✅ Create and configure Python virtual environment
+- ✅ Install all backend dependencies
+- ✅ Install all frontend dependencies
+- ✅ Create startup scripts for easy launching
+
+### Manual Setup (Alternative)
+
+If you prefer manual setup or the automated script doesn't work:
+
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/zubairkhawar/genai-studio.git
