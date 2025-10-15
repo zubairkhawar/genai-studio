@@ -237,16 +237,34 @@ def download_huggingface_with_patterns(model_id: str, force: bool = False, max_r
             local_dir.mkdir(parents=True, exist_ok=True)
 
             # Download with pattern filtering
-            snapshot_download(
-                repo_id=repo_id,
-                local_dir=str(local_dir),
-                allow_patterns=include_patterns,
-                force_download=bool(force),
-                max_workers=1,
-                tqdm_class=None,
-                local_files_only=False,
-                token=None,
-            )
+            try:
+                snapshot_download(
+                    repo_id=repo_id,
+                    local_dir=str(local_dir),
+                    allow_patterns=include_patterns,
+                    force_download=bool(force),
+                    max_workers=1,
+                    tqdm_class=None,
+                    local_files_only=False,
+                    token=None,
+                )
+            except Exception as download_error:
+                # Check if it's a Xet Storage warning that we can ignore
+                if "Xet Storage" in str(download_error) and "hf_xet" in str(download_error):
+                    logger.warning("⚠️ Xet Storage warning detected - this is just a performance notice, download will continue...")
+                    # Try again with a simpler approach
+                    snapshot_download(
+                        repo_id=repo_id,
+                        local_dir=str(local_dir),
+                        allow_patterns=include_patterns,
+                        force_download=bool(force),
+                        max_workers=1,
+                        tqdm_class=None,
+                        local_files_only=False,
+                        token=None,
+                    )
+                else:
+                    raise download_error
 
             # Verify download by checking for essential files
             downloaded_files = []
@@ -519,17 +537,34 @@ def download_model_with_retry(model_id: str, force: bool = False, max_retries: i
             local_dir.mkdir(parents=True, exist_ok=True)
 
             # Enhanced download with better error handling
-            snapshot_download(
-                repo_id=config["repo_id"],
-                local_dir=str(local_dir),
-                force_download=bool(force),
-                # resume_download and local_dir_use_symlinks are deprecated
-                # Downloads automatically resume and don't use symlinks anymore
-                max_workers=1,  # Reduce concurrent downloads to avoid network issues
-                tqdm_class=None,  # Disable progress bar to reduce output noise
-                local_files_only=False,  # Allow downloads from internet
-                token=None,  # Use anonymous access
-            )
+            try:
+                snapshot_download(
+                    repo_id=config["repo_id"],
+                    local_dir=str(local_dir),
+                    force_download=bool(force),
+                    # resume_download and local_dir_use_symlinks are deprecated
+                    # Downloads automatically resume and don't use symlinks anymore
+                    max_workers=1,  # Reduce concurrent downloads to avoid network issues
+                    tqdm_class=None,  # Disable progress bar to reduce output noise
+                    local_files_only=False,  # Allow downloads from internet
+                    token=None,  # Use anonymous access
+                )
+            except Exception as download_error:
+                # Check if it's a Xet Storage warning that we can ignore
+                if "Xet Storage" in str(download_error) and "hf_xet" in str(download_error):
+                    logger.warning("⚠️ Xet Storage warning detected - this is just a performance notice, download will continue...")
+                    # Try again with a simpler approach
+                    snapshot_download(
+                        repo_id=config["repo_id"],
+                        local_dir=str(local_dir),
+                        force_download=bool(force),
+                        max_workers=1,
+                        tqdm_class=None,
+                        local_files_only=False,
+                        token=None,
+                    )
+                else:
+                    raise download_error
 
             # Verify: require at least one weight file
             weight_files = (

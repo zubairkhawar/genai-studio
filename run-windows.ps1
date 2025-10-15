@@ -154,6 +154,15 @@ try {
     Write-Info 'flash-attn was not installed'
 }
 
+# Install hf_xet package for better Hugging Face download performance
+Write-Info 'Installing hf_xet for optimized Hugging Face downloads...'
+try {
+    & $VenvPip install "huggingface-hub[hf_xet]>=0.19.0"
+    Write-Info 'hf_xet package installed successfully'
+} catch {
+    Write-Warn 'Failed to install hf_xet package - downloads will work but may be slower'
+}
+
 # Ensure critical backend packages exist
 Write-Info 'Verifying critical backend packages in venv...'
 $criticalPackages = @(
@@ -172,7 +181,8 @@ $criticalPackages = @(
     @{Name='pydantic'; Module='pydantic'; Package='pydantic>=2.5.0'},
     @{Name='python-dotenv'; Module='dotenv'; Package='python-dotenv>=1.0.0'},
     @{Name='aiofiles'; Module='aiofiles'; Package='aiofiles>=23.2.0'},
-    @{Name='python-multipart'; Module='multipart'; Package='python-multipart>=0.0.6'}
+    @{Name='python-multipart'; Module='multipart'; Package='python-multipart>=0.0.6'},
+    @{Name='huggingface-hub'; Module='huggingface_hub'; Package='huggingface-hub[hf_xet]>=0.19.0'}
 )
 
 foreach ($pkg in $criticalPackages) {
