@@ -1,0 +1,53 @@
+﻿fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+diffusers>=0.21.0
+transformers>=4.35.0
+accelerate>=0.24.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+librosa>=0.10.0
+soundfile>=0.12.0
+ffmpeg-python>=0.2.0
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+aiofiles>=23.2.0
+redis>=5.0.0
+celery>=5.3.0
+psutil>=5.9.0
+GPUtil>=1.4.0
+pynvml
+
+# Optional AI model dependencies
+bark>=0.1.0
+audiocraft>=1.3.0
+audioldm>=0.0.1
+TTS>=0.20.0  # For XTTS-v2
+
+# AMD ROCm support (optional)
+# torch-rocm>=2.0.0  # Uncomment for AMD GPU support
+
+# Additional audio processing
+pydub>=0.25.1
+webrtcvad>=2.0.10
+
+# Model downloading and caching
+huggingface-hub>=0.19.0
+tqdm>=4.65.0
+
+# AnimateDiff official repository dependencies
+PyYAML>=6.0
+omegaconf>=2.3.0
+einops>=0.7.0
+imageio>=2.31.0
+imageio-ffmpeg>=0.4.8
+gradio>=3.50.0
+
+# Enhanced Video Pipeline dependencies
+realesrgan>=0.3.0
+basicsr>=1.4.2
+facexlib>=0.3.0
+gfpgan>=1.3.8
+requests>=2.31.0

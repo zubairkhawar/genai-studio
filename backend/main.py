@@ -223,17 +223,27 @@ def check_existing_models():
                     })
                     print(f"⚠️  {model_info['name']} found but required files missing - will re-download")
             elif len(weight_files) > 0:
-                # Calculate total size
+                # Calculate total size and check if it's reasonable
                 total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
                 size_mb = total_size / (1024 * 1024)
                 
-                download_status["models"][model_key].update({
-                    "status": "done",
-                    "progress": 100,
-                    "downloaded_mb": size_mb,
-                    "files_verified": True
-                })
-                print(f"✅ {model_info['name']} already downloaded")
+                # For Stable Diffusion, expect at least 4GB of model files
+                if model_key == "stable_diffusion" and size_mb < 4000:
+                    download_status["models"][model_key].update({
+                        "status": "pending",
+                        "progress": 0,
+                        "downloaded_mb": size_mb,
+                        "files_verified": False
+                    })
+                    print(f"⚠️  {model_info['name']} found but size too small ({size_mb:.1f}MB) - will re-download")
+                else:
+                    download_status["models"][model_key].update({
+                        "status": "done",
+                        "progress": 100,
+                        "downloaded_mb": size_mb,
+                        "files_verified": True
+                    })
+                    print(f"✅ {model_info['name']} already downloaded ({size_mb:.1f}MB)")
             else:
                 # Directory exists but no model files - mark as pending
                 download_status["models"][model_key].update({
@@ -372,19 +382,21 @@ def download_all_models_background():
         # First, check existing models to get accurate status
         check_existing_models()
         
-        # Reset all model statuses to pending for re-download
+        # Only reset statuses for models that are not already completed
         for model_key in download_status["models"]:
-            download_status["models"][model_key].update({
-                "status": "pending",
-                "progress": 0,
-                "downloaded_mb": 0,
-                "files_verified": False
-            })
+            if download_status["models"][model_key]["status"] != "done":
+                download_status["models"][model_key].update({
+                    "status": "pending",
+                    "progress": 0,
+                    "downloaded_mb": 0,
+                    "files_verified": False
+                })
         
-        # Download models sequentially
+        # Download models sequentially - only those that are pending
         models_to_download = []
         for model_key, model_info in download_status["models"].items():
-            models_to_download.append((model_key, model_info))
+            if model_info["status"] == "pending":
+                models_to_download.append((model_key, model_info))
         
         if not models_to_download:
             print("✅ All models already downloaded!")
@@ -1070,8 +1082,30 @@ async def get_download_status():
 
 @app.post("/download-cleanup")
 async def cleanup_download_status():
-    """Reset download status (useful when download is interrupted)"""
+    """Reset download status and clean up incomplete downloads"""
     global download_status
+    
+    print("🧹 Cleaning up download status and incomplete downloads...")
+    
+    # Clean up incomplete downloads
+    for model_key, model_info in download_status["models"].items():
+        if model_info["status"] == "downloading" or model_info["status"] == "error":
+            local_dir = pathlib.Path(model_info["local_dir"])
+            
+            # Check if directory exists but has incomplete files
+            if local_dir.exists():
+                weight_files = list(local_dir.rglob("*.safetensors")) + list(local_dir.rglob("*.bin")) + list(local_dir.rglob("*.pt")) + list(local_dir.rglob("*.pth"))
+                
+                # If we have some files but they seem incomplete (less than 1MB total)
+                if weight_files:
+                    total_size = sum(f.stat().st_size for f in weight_files if f.is_file())
+                    if total_size < 1024 * 1024:  # Less than 1MB
+                        print(f"🗑️  Cleaning incomplete {model_info['name']} download ({total_size} bytes)")
+                        try:
+                            import shutil
+                            shutil.rmtree(local_dir)
+                        except Exception as e:
+                            print(f"⚠️  Could not clean {model_info['name']}: {e}")
     
     download_status.update({
         "is_downloading": False,
@@ -1082,7 +1116,7 @@ async def cleanup_download_status():
         "error": None
     })
     
-    # Reset model statuses
+    # Reset model statuses and re-check existing models
     for model_id in download_status["models"]:
         download_status["models"][model_id].update({
             "downloaded_mb": 0,
@@ -1093,7 +1127,10 @@ async def cleanup_download_status():
             "files_verified": False
         })
     
-    return {"message": "Download status cleaned up successfully"}
+    # Re-check existing models to get accurate status
+    check_existing_models()
+    
+    return {"message": "Download status cleaned up and existing models re-checked"}
 
 @app.post("/optimize-models")
 async def optimize_models():
