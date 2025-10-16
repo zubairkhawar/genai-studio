@@ -75,9 +75,83 @@ if (-not (Test-Command 'node')) {
     $nodeUrl = "https://nodejs.org/dist/v$nodeVer/node-v$nodeVer-x64.msi"
     $nodeMsi = Join-Path $ToolsDir "node-v$nodeVer-x64.msi"
     Download-File $nodeUrl $nodeMsi
+    
     # Per-user install (no admin): ALLUSERS=0
-    Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn ALLUSERS=0" -Wait -NoNewWindow
-    if (-not (Test-Command 'node')) { throw 'Node.js installation failed.' }
+    Write-Info 'Installing Node.js (this may take a few minutes)...'
+    $msiLog = Join-Path $ToolsDir 'node-install.log'
+    if (Test-Path $msiLog) { Remove-Item $msiLog -Force -ErrorAction SilentlyContinue }
+    $installProcess = Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn ALLUSERS=0 /L*v `"$msiLog`"" -Wait -PassThru -NoNewWindow
+    
+    if ($installProcess.ExitCode -ne 0) {
+        Write-Err "Node.js MSI installation failed with exit code: $($installProcess.ExitCode)"
+        Write-Info 'This usually means the installation was blocked or failed.'
+    }
+    
+    # Refresh environment variables and PATH
+    Write-Info 'Refreshing environment variables...'
+    $machinePath = [System.Environment]::GetEnvironmentVariable('PATH','Machine')
+    $userPath    = [System.Environment]::GetEnvironmentVariable('PATH','User')
+    $env:PATH    = "$machinePath;$userPath"
+
+    # Discover common Node.js installation locations and prepend if they exist
+    $commonNodePaths = @(
+        "$env:LOCALAPPDATA\Programs\nodejs",
+        "$env:PROGRAMFILES\nodejs",
+        "$env:PROGRAMFILES(X86)\nodejs",
+        "$env:APPDATA\npm"
+    )
+
+    foreach ($path in $commonNodePaths) {
+        if ($path -and (Test-Path $path)) {
+            if (-not ($env:PATH -split ';' | Where-Object { $_ -eq $path })) {
+                $env:PATH = "$path;$env:PATH"
+            }
+        }
+    }
+
+    # If node.exe exists in these locations, resolve exact path and test directly
+    $candidateNodeExe = @(
+        (Join-Path "$env:LOCALAPPDATA\Programs\nodejs" 'node.exe'),
+        (Join-Path "$env:PROGRAMFILES\nodejs" 'node.exe'),
+        (Join-Path "$env:PROGRAMFILES(X86)\nodejs" 'node.exe')
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    
+    # Wait a moment for PATH to propagate
+    Start-Sleep -Seconds 2
+    
+    # Final check with multiple attempts
+    $nodeFound = $false
+    for ($i = 1; $i -le 3; $i++) {
+        Write-Info "Checking for Node.js (attempt $i/3)..."
+        if (Test-Command 'node') {
+            $nodeFound = $true
+            break
+        }
+        if (-not $nodeFound -and $candidateNodeExe) {
+            try {
+                $ver = & $candidateNodeExe -v 2>$null
+                if ($LASTEXITCODE -eq 0 -and $ver) { $nodeFound = $true; break }
+            } catch {}
+        }
+        Start-Sleep -Seconds 3
+    }
+    
+    if (-not $nodeFound) {
+        Write-Err 'Node.js installation failed or Node.js is not in PATH.'
+        if (Test-Path $msiLog) { Write-Info "MSI log saved to: $msiLog" }
+        Write-Info 'Try these steps:'
+        Write-Info '1) Restart PowerShell or reboot to refresh PATH'
+        Write-Info '2) Manually run the MSI from tools and re-run this script'
+        Write-Info "   -> $nodeMsi"
+        throw 'Node.js installation failed. See log and suggestions above.'
+    }
+
+    # Self-test: print node and npm versions to confirm
+    try {
+        $nv = & node -v
+        $pv = & npm -v
+        Write-Info "Node.js detected: node $nv, npm $pv"
+    } catch {}
 }
 
 # 3) Ensure FFmpeg (portable)
